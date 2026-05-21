@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+
+# Virtual env
+cleanenv/
+
+# Secrets / keys
+.env
+
+# Test/temp audio files
+*.wav
+*.mp3
+
+# Logs
+logs/
+ai_companion/logs/
+*.log
+
+# VS Code
+.vscode/
+
+# User data
+ai_companion/users/
+ai_companion/health_profile.json
+ai_companion/alarms.json
+ai_companion/reminders.json
