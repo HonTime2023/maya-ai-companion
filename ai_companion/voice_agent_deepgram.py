@@ -184,10 +184,14 @@ class DeepgramVoiceAgent:
                         "3. Address the user by their first name whenever you know it. "
                         "4. If the user says their name (e.g. 'my name is Alex', 'call me Alex', 'I am Alex', 'change my name to Alex'), call the set_name function immediately with that name. "
                         "5. If the user mentions where they live or their city (e.g. 'I live in Lagos', 'I am in Abuja', 'my city is Kano'), call the set_location function with that city name. "
-                        "6. For weather, ALWAYS call get_weather — never guess the weather. "
+                        "6. For weather questions: call get_weather for current/today's weather. Call get_weather_forecast for tomorrow or any future day — never guess. "
                         "7. For time or date, always call get_time or get_date. "
                         "8. Respond naturally when greeted with 'Hello Jarvis', 'Hey Jarvis', or just 'Jarvis'. "
-                        "9. When a reminder is injected, speak it naturally and warmly, like: 'Just a heads up — it's time to take your medication!' "
+                        "9. When a reminder or alarm is injected, speak it naturally and warmly, like: 'Just a heads up — your alarm is going off!' "
+                        "10. When the user says anything like 'alarm off', 'stop alarm', 'stop the alarm', 'dismiss alarm', or 'silence alarm', call the stop_alarm function immediately. "
+                        "11. When the user says anything like 'reminder off', 'stop reminder', 'dismiss reminder', or 'silence reminder', call the stop_reminder function immediately. "
+                        "12. When an alarm or reminder notification is injected and you speak it, do NOT call any other functions. Simply speak the notification warmly and wait for the user. "
+                        "13. When you receive weather data from get_weather or get_weather_forecast, always translate it into friendly everyday language. Tell the user what to expect and what to do — like 'it will be hot and humid, stay hydrated' or 'there is a good chance of rain, carry an umbrella'. Never just read numbers — make it feel helpful and human. "
                     ),
                 },
                 "speak": {
@@ -342,6 +346,17 @@ class DeepgramVoiceAgent:
                     logger.info(f"✅ Function result sent: {func_name}")
                 except Exception as e:
                     logger.error(f"Error executing function {func_name}: {e}")
+                    # Always send a response so the LLM isn't left hanging
+                    try:
+                        err_resp = {
+                            "type": "FunctionCallResponse",
+                            "name": func_name,
+                            "id": func_id,
+                            "content": json.dumps(f"Sorry, I couldn't get that information right now."),
+                        }
+                        await self.ws.send(json.dumps(err_resp))
+                    except Exception:
+                        pass
 
     def _mic_reader_thread(self, mic_queue: queue.Queue):
         """Background thread: reads mic audio into a queue using sounddevice (more reliable on Windows)."""
@@ -578,6 +593,11 @@ class VoiceAgentThread(threading.Thread):
         self.on_transcript = on_transcript
         self.on_audio_play = on_audio_play
         self._stop_event = threading.Event()
+        self._alarm_active = threading.Event()    # set while alarm chime is looping
+        self._reminder_active = threading.Event() # set while reminder chime is looping
+        self._current_reminder_msg = ""           # reminder text to repeat
+        self._chime_stop_event = threading.Event()  # set to stop the looping chime
+        self._chime_stop_event.set()                # not playing initially
         self.loop = None
 
     def register_function(
@@ -594,10 +614,10 @@ class VoiceAgentThread(threading.Thread):
     def _alarm_checker_thread(self):
         """Background thread: checks alarms/reminders every 5s and fires audio+speech."""
         import time as _time
-        import winsound
+        import re as _re
         from pathlib import Path
 
-        # Regular alarm/reminder chime — pleasant tone
+        # Regular alarm/reminder chime — pleasant tone (loops until stopped)
         alarm_chime_wav = r"C:\Windows\Media\Alarm01.wav"
         # Emergency sound — kept for the emergency feature
         emergency_wav = str(Path(__file__).parent / "alarm.wav")  # noqa: F841
@@ -612,31 +632,122 @@ class VoiceAgentThread(threading.Thread):
                 from reminders import check_reminders
                 from alarms import check_alarms
 
-                # --- REMINDERS: chime + agent speaks the message ---
+                # --- REMINDERS: loop chime + nagger speaks message every 15s ---
                 due_reminders = check_reminders()
                 for msg in due_reminders:
                     logger.info(f"[REMINDER] Due: {msg}")
-                    try:
-                        winsound.PlaySound(alarm_chime_wav, winsound.SND_FILENAME | winsound.SND_ASYNC)
-                    except Exception as e:
-                        logger.warning(f"[ALARM SOUND] {e}")
+                    # Convert first-person pronouns to second-person for agent speech
+                    msg = _re.sub(r"\bmy\b", "your", msg, flags=_re.IGNORECASE)
+                    msg = _re.sub(r"\bmyself\b", "yourself", msg, flags=_re.IGNORECASE)
+                    msg = _re.sub(r"\bI'm\b", "you're", msg, flags=_re.IGNORECASE)
+                    msg = _re.sub(r"\bI'll\b", "you'll", msg, flags=_re.IGNORECASE)
+                    msg = _re.sub(r"\bI've\b", "you've", msg, flags=_re.IGNORECASE)
+                    msg = _re.sub(r"\bI\b", "you", msg)
+                    if not self._reminder_active.is_set():
+                        self._reminder_active.set()
+                        self._current_reminder_msg = msg
+                        self._chime_stop_event.set()
+                        _time.sleep(0.05)
+                        self._chime_stop_event.clear()
+                        threading.Thread(
+                            target=self._chime_loop_thread,
+                            args=(alarm_chime_wav,),
+                            daemon=True,
+                        ).start()
+                        # Start nagger thread that repeats the reason every 15s
+                        nag = threading.Thread(
+                            target=self._reminder_nagger_thread, args=(msg,), daemon=True
+                        )
+                        nag.start()
                     if self.loop and not self.loop.is_closed():
-                        speak_text = f"Reminder for you: {msg}"
+                        try:
+                            from user_manager import get_current_user as _gcu
+                            _raw = _gcu().get_name()
+                            _uname = _raw if _raw and _raw.lower() != "user" else ""
+                        except Exception:
+                            _uname = ""
+                        _hi = f"Hey {_uname}" if _uname else "Hey"
+                        speak_text = (
+                            f"{_hi}, you asked me to remind you to {msg}. "
+                            f"Say reminder off when you are done."
+                        )
                         asyncio.run_coroutine_threadsafe(
                             self.agent.inject_agent_message(speak_text), self.loop
                         )
 
-                # --- ALARMS: chime only (no speech) ---
+                # --- ALARMS: loop chime + agent speaks the label ---
                 due_alarms = check_alarms()
                 for note in due_alarms:
                     logger.info(f"[ALARM] Due: {note}")
-                    try:
-                        winsound.PlaySound(alarm_chime_wav, winsound.SND_FILENAME)
-                    except Exception as e:
-                        logger.warning(f"[ALARM SOUND] {e}")
+                    if not self._alarm_active.is_set():
+                        self._alarm_active.set()
+                        self._chime_stop_event.set()
+                        _time.sleep(0.05)
+                        self._chime_stop_event.clear()
+                        threading.Thread(
+                            target=self._chime_loop_thread,
+                            args=(alarm_chime_wav,),
+                            daemon=True,
+                        ).start()
+                    if self.loop and not self.loop.is_closed():
+                        speak_text = f"Your alarm is going off: {note}. Say 'alarm off' to stop it."
+                        asyncio.run_coroutine_threadsafe(
+                            self.agent.inject_agent_message(speak_text), self.loop
+                        )
 
             except Exception as e:
                 logger.error(f"[ALARM CHECKER] Error: {e}")
+
+    def _reminder_nagger_thread(self, msg: str):
+        """Repeats the reminder message every 15s until dismissed."""
+        import time as _time
+        try:
+            from user_manager import get_current_user as _gcu
+            _raw = _gcu().get_name()
+            _uname = _raw if _raw and _raw.lower() != "user" else ""
+        except Exception:
+            _uname = ""
+        _hi = f"Hey {_uname}" if _uname else "Hey"
+        phrases = [
+            f"{_hi}, you asked me to remind you to {msg}.",
+            f"{_hi}, just checking in. You wanted to {msg}.",
+            f"{_hi}, still reminding you about {msg}. Say reminder off when you are ready.",
+            f"{_hi}, do not forget. You set a reminder to {msg}.",
+            f"{_hi}, your reminder is still active. You asked me to remind you to {msg}.",
+        ]
+        i = 0
+        _time.sleep(15)
+        while self._reminder_active.is_set() and not self._stop_event.is_set():
+            if self.loop and not self.loop.is_closed():
+                asyncio.run_coroutine_threadsafe(
+                    self.agent.inject_agent_message(phrases[i % len(phrases)]), self.loop
+                )
+            i += 1
+            _time.sleep(15)
+
+    def _chime_loop_thread(self, wav_path: str):
+        """Play a WAV file in a loop using sounddevice until _chime_stop_event is set."""
+        import wave
+        try:
+            with wave.open(wav_path, 'rb') as wf:
+                sr = wf.getframerate()
+                channels = wf.getnchannels()
+                sw = wf.getsampwidth()
+                raw = wf.readframes(wf.getnframes())
+            if sw == 2:
+                audio = np.frombuffer(raw, dtype=np.int16)
+            elif sw == 1:
+                audio = ((np.frombuffer(raw, dtype=np.uint8).astype(np.int16)) - 128) * 256
+            else:
+                logger.warning(f"[CHIME] Unsupported sample width: {sw}")
+                return
+            if channels > 1:
+                audio = audio.reshape(-1, channels)
+            with sd.OutputStream(samplerate=sr, channels=channels, dtype='int16') as stream:
+                while not self._chime_stop_event.is_set():
+                    stream.write(audio)
+        except Exception as e:
+            logger.warning(f"[CHIME] Playback error: {e}")
 
     def run(self):
         """Run the agent in the background thread."""
@@ -785,6 +896,54 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
             "required": ["city"],
         },
         handler=lambda city: handle_set_location(city),
+        client_side=True,
+    )
+
+    def _stop_alarm_handler():
+        agent._alarm_active.clear()
+        agent._chime_stop_event.set()
+        return "Alarm stopped."
+
+    agent.register_function(
+        name="stop_alarm",
+        description="Stop a currently ringing alarm chime",
+        parameters={"type": "object", "properties": {}},
+        handler=_stop_alarm_handler,
+        client_side=True,
+    )
+
+    def _stop_reminder_handler():
+        agent._reminder_active.clear()
+        agent._current_reminder_msg = ""
+        agent._chime_stop_event.set()
+        return "Reminder dismissed."
+
+    agent.register_function(
+        name="stop_reminder",
+        description="Dismiss a currently ringing reminder chime",
+        parameters={"type": "object", "properties": {}},
+        handler=_stop_reminder_handler,
+        client_side=True,
+    )
+
+    from weather import get_weather_forecast
+
+    agent.register_function(
+        name="get_weather_forecast",
+        description="Get weather forecast for a future date (tomorrow, day after tomorrow, etc.)",
+        parameters={
+            "type": "object",
+            "properties": {
+                "days_ahead": {
+                    "type": "integer",
+                    "description": "Number of days ahead: 1=tomorrow, 2=day after tomorrow, up to 5",
+                },
+            },
+            "required": ["days_ahead"],
+        },
+        handler=lambda days_ahead: get_weather_forecast(
+            get_current_user().data.get("location", "Lagos"), int(days_ahead)
+        ),
         client_side=True,
     )
 

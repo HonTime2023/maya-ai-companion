@@ -190,7 +190,8 @@ def handle_location_command(text: str) -> str:
         return "I couldn't parse your location. Could you tell me your city?"
 
 
-def handle_set_name(name: str) -> str:    try:
+def handle_set_name(name: str) -> str:
+    try:
         name = name.strip().title()
         user = get_current_user()
         user.update_name(name)
@@ -256,21 +257,35 @@ def handle_set_reminder_direct(task: str, time_str: str = "") -> str:
             # Strip leading "at"/"for" so strptime sees clean time
             import re as _re
             clean = _re.sub(r'^(?:at\s+the\s+|at\s+|for\s+)', '', time_str.strip(), flags=_re.IGNORECASE).strip()
-            for fmt in ["%I:%M %p", "%I %p", "%H:%M", "%I:%M%p", "%I%p"]:
-                try:
-                    t = datetime.strptime(clean.upper(), fmt)
-                    reminder_dt = now.replace(hour=t.hour, minute=t.minute,
-                                              second=0, microsecond=0)
-                    # If that time has already passed today, schedule for tomorrow
-                    if reminder_dt <= now:
-                        reminder_dt += timedelta(days=1)
-                    break
-                except ValueError:
-                    continue
+
+            # Relative time: "in X minutes" or "in X hours"
+            m = _re.search(r'in\s+(\d+)\s+(minutes?|mins?)', clean, _re.IGNORECASE)
+            if m:
+                reminder_dt = now + timedelta(minutes=int(m.group(1)))
+            else:
+                m = _re.search(r'in\s+(\d+)\s+(hours?)', clean, _re.IGNORECASE)
+                if m:
+                    reminder_dt = now + timedelta(hours=int(m.group(1)))
+
+            # Absolute time formats
+            if not reminder_dt:
+                for fmt in ["%I:%M %p", "%I %p", "%H:%M", "%I:%M%p", "%I%p"]:
+                    try:
+                        t = datetime.strptime(clean.upper(), fmt)
+                        reminder_dt = now.replace(hour=t.hour, minute=t.minute,
+                                                  second=0, microsecond=0)
+                        # If that time has already passed today, schedule for tomorrow
+                        if reminder_dt <= now:
+                            reminder_dt += timedelta(days=1)
+                        break
+                    except ValueError:
+                        continue
 
         user = get_current_user()
         if reminder_dt:
             dt_str = reminder_dt.strftime("%Y-%m-%d %H:%M")
+            # Format for speech with colon: "3:52 PM" not "352 PM" or "03:52 PM"
+            spoken_time = reminder_dt.strftime("%I:%M %p").lstrip("0")
             user.add_reminder({
                 "datetime": dt_str,
                 "message": task,
@@ -278,18 +293,11 @@ def handle_set_reminder_direct(task: str, time_str: str = "") -> str:
                 "created_at": now.isoformat(),
             })
             logger.info(f"[REMINDER SET] '{task}' at {dt_str}")
-            return f"Reminder set for {time_str}: {task}."
+            return f"Reminder set for {spoken_time}: {task}."
         else:
-            # Fallback: store raw time so check_reminders can attempt to parse it
-            user.add_reminder({
-                "time": time_str,
-                "message": task,
-                "description": task,
-                "done": False,
-                "created_at": now.isoformat(),
-            })
-            logger.info(f"[REMINDER SET] '{task}' at {time_str} (raw)")
-            return f"Reminder set for {time_str}: {task}."
+            # Could not parse the time — tell the LLM to ask the user to clarify
+            logger.warning(f"[REMINDER] Could not parse time: '{time_str}'")
+            return f"I could not understand '{time_str}' as a time. Please ask the user to say when they want the reminder, for example '3:30 PM' or 'in 20 minutes'."
     except Exception as e:
         logger.error(f"Direct reminder set error: {e}")
         return "I had trouble setting that reminder."

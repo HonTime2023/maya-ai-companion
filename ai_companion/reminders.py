@@ -78,6 +78,7 @@ def check_reminders():
     now = datetime.now()
     due = []
 
+    changed = False
     for r in reminders:
         if r.get("done"):
             continue
@@ -94,11 +95,14 @@ def check_reminders():
             if reminder_time <= now:
                 due.append(r.get("message", r.get("description", "Reminder")))
                 r["done"] = True
+                changed = True
 
         except Exception as e:
-            print(f"⚠️ Error checking reminder: {e}")
+            print(f"⚠️ Error checking reminder: {e} — auto-dismissing")
+            r["done"] = True  # prevent repeated errors on malformed reminders
+            changed = True
 
-    if any(not r.get("done") for r in reminders):
+    if changed:
         save_reminders(reminders)
 
     return due
