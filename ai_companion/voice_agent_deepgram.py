@@ -597,7 +597,14 @@ class VoiceAgentThread(threading.Thread):
         import winsound
         from pathlib import Path
 
-        alarm_wav = str(Path(__file__).parent / "alarm.wav")
+        # Regular alarm/reminder chime — pleasant tone
+        alarm_chime_wav = r"C:\Windows\Media\Alarm01.wav"
+        # Emergency sound — kept for the emergency feature
+        emergency_wav = str(Path(__file__).parent / "alarm.wav")  # noqa: F841
+
+        # Fall back to emergency sound if chime file is missing
+        if not Path(alarm_chime_wav).exists():
+            alarm_chime_wav = emergency_wav
 
         while not self._stop_event.is_set():
             _time.sleep(5)
@@ -605,12 +612,12 @@ class VoiceAgentThread(threading.Thread):
                 from reminders import check_reminders
                 from alarms import check_alarms
 
-                # --- REMINDERS: alarm sound + agent speaks the message ---
+                # --- REMINDERS: chime + agent speaks the message ---
                 due_reminders = check_reminders()
                 for msg in due_reminders:
                     logger.info(f"[REMINDER] Due: {msg}")
                     try:
-                        winsound.PlaySound(alarm_wav, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                        winsound.PlaySound(alarm_chime_wav, winsound.SND_FILENAME | winsound.SND_ASYNC)
                     except Exception as e:
                         logger.warning(f"[ALARM SOUND] {e}")
                     if self.loop and not self.loop.is_closed():
@@ -619,12 +626,12 @@ class VoiceAgentThread(threading.Thread):
                             self.agent.inject_agent_message(speak_text), self.loop
                         )
 
-                # --- ALARMS: alarm sound only (no speech) ---
+                # --- ALARMS: chime only (no speech) ---
                 due_alarms = check_alarms()
                 for note in due_alarms:
                     logger.info(f"[ALARM] Due: {note}")
                     try:
-                        winsound.PlaySound(alarm_wav, winsound.SND_FILENAME)
+                        winsound.PlaySound(alarm_chime_wav, winsound.SND_FILENAME)
                     except Exception as e:
                         logger.warning(f"[ALARM SOUND] {e}")
 
