@@ -75,7 +75,8 @@ def check_alarms():
         if normalized == now and alarm.get("last_triggered") != now:
             alarm["last_triggered"] = now
             alarm["time"] = normalized  # Fix the stored value going forward
-            triggered.append(alarm.get("note", "Alarm"))
+            label = alarm.get("note") or alarm.get("description") or "Alarm"
+            triggered.append(label)
 
     save_alarms(alarms)
     return triggered
@@ -109,39 +110,40 @@ def list_alarms():
 
 def _normalize_time(time_str: str) -> str:
     """
-    Normalize time string to HH:MM format.
-    Handles various formats: "9", "9:00", "09:00", "9 am", "9am", etc.
+    Normalize time string to HH:MM (24-hour) format.
+    Handles: "9", "9:00", "09:00", "9 am", "9am", "9:00 AM", "9:30 PM",
+             "at 9 AM", "for 7:30 PM", etc.
     """
+    import re as _re
     if not time_str:
         return None
 
-    time_str = time_str.lower().strip()
+    s = time_str.lower().strip()
+    # Strip leading "at the", "at", "for" prefixes
+    s = _re.sub(r'^(?:at\s+the\s+|at\s+|for\s+)', '', s).strip()
+    # Normalise a.m./p.m.
+    s = s.replace("a.m.", "am").replace("p.m.", "pm")
+
+    # Detect and strip AM/PM suffix BEFORE splitting on ":"
+    is_pm = s.endswith("pm") or " pm" in s
+    is_am = s.endswith("am") or " am" in s
+    s = _re.sub(r'\s*(am|pm)\s*$', '', s).strip()
 
     try:
-        # Try HH:MM format first
-        if ":" in time_str:
-            parts = time_str.split(":")
-            hour = int(parts[0])
-            minute = int(parts[1]) if len(parts) > 1 else 0
+        if ":" in s:
+            parts = s.split(":")
+            hour = int(parts[0].strip())
+            minute = int(parts[1].strip()) if len(parts) > 1 else 0
         else:
-            # Handle AM/PM format
-            if "pm" in time_str:
-                time_str = time_str.replace("pm", "").strip()
-                hour = int(time_str)
-                if hour != 12:
-                    hour += 12
-                minute = 0
-            elif "am" in time_str:
-                time_str = time_str.replace("am", "").strip()
-                hour = int(time_str)
-                if hour == 12:
-                    hour = 0
-                minute = 0
-            else:
-                hour = int(time_str)
-                minute = 0
+            hour = int(s.strip())
+            minute = 0
 
-        # Validate range
+        # Apply 12-hour → 24-hour conversion
+        if is_pm and hour != 12:
+            hour += 12
+        elif is_am and hour == 12:
+            hour = 0
+
         if not (0 <= hour <= 23) or not (0 <= minute <= 59):
             return None
 

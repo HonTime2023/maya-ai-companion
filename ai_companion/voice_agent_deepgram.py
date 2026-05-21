@@ -666,9 +666,9 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         handle_date_command,
         handle_weather_command,
         handle_check_alarms,
-        handle_set_alarm,
+        handle_set_alarm_direct,
         handle_check_reminders,
-        handle_set_reminder,
+        handle_set_reminder_direct,
         handle_set_name,
         handle_set_location,
     )
@@ -726,7 +726,7 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
             },
             "required": ["time"],
         },
-        handler=lambda time, label="": handle_set_alarm(f"set alarm for {time} {label}"),
+        handler=lambda time, label="": handle_set_alarm_direct(time, label),
         client_side=True,
     )
 
@@ -749,7 +749,7 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
             },
             "required": ["task"],
         },
-        handler=lambda task, time="": handle_set_reminder(f"remind me to {task} at {time}"),
+        handler=lambda task, time="": handle_set_reminder_direct(task, time),
         client_side=True,
     )
 

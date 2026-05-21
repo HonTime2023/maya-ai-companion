@@ -190,9 +190,7 @@ def handle_location_command(text: str) -> str:
         return "I couldn't parse your location. Could you tell me your city?"
 
 
-def handle_set_name(name: str) -> str:
-    """Save the user's name to their profile."""
-    try:
+def handle_set_name(name: str) -> str:    try:
         name = name.strip().title()
         user = get_current_user()
         user.update_name(name)
@@ -215,6 +213,86 @@ def handle_set_location(city: str) -> str:
     except Exception as e:
         logger.error(f"Set location error: {e}")
         return "I had trouble saving your location."
+
+
+def handle_set_alarm_direct(time_str: str, label: str = "") -> str:
+    """
+    Set an alarm directly from structured agent parameters.
+    Bypasses regex parsing — uses _normalize_time on the clean time string.
+    """
+    try:
+        from alarms import _normalize_time
+        normalized = _normalize_time(time_str)
+        if not normalized:
+            return f"I couldn't understand the alarm time '{time_str}'. Try saying '7 AM' or '14:30'."
+        note = label.strip() if label and label.strip() else "Alarm"
+        user = get_current_user()
+        user.add_alarm({
+            "time": normalized,
+            "note": note,
+            "description": note,
+            "enabled": True,
+            "last_triggered": None,
+            "created_at": datetime.now().isoformat(),
+        })
+        logger.info(f"[ALARM SET] '{note}' at {normalized}")
+        return f"Done! Alarm set for {time_str}."
+    except Exception as e:
+        logger.error(f"Direct alarm set error: {e}")
+        return "I had trouble setting that alarm."
+
+
+def handle_set_reminder_direct(task: str, time_str: str = "") -> str:
+    """
+    Set a reminder directly from structured agent parameters.
+    Converts the time string to an absolute datetime and stores it.
+    """
+    try:
+        from datetime import timedelta
+        now = datetime.now()
+        reminder_dt = None
+
+        if time_str:
+            # Strip leading "at"/"for" so strptime sees clean time
+            import re as _re
+            clean = _re.sub(r'^(?:at\s+the\s+|at\s+|for\s+)', '', time_str.strip(), flags=_re.IGNORECASE).strip()
+            for fmt in ["%I:%M %p", "%I %p", "%H:%M", "%I:%M%p", "%I%p"]:
+                try:
+                    t = datetime.strptime(clean.upper(), fmt)
+                    reminder_dt = now.replace(hour=t.hour, minute=t.minute,
+                                              second=0, microsecond=0)
+                    # If that time has already passed today, schedule for tomorrow
+                    if reminder_dt <= now:
+                        reminder_dt += timedelta(days=1)
+                    break
+                except ValueError:
+                    continue
+
+        user = get_current_user()
+        if reminder_dt:
+            dt_str = reminder_dt.strftime("%Y-%m-%d %H:%M")
+            user.add_reminder({
+                "datetime": dt_str,
+                "message": task,
+                "done": False,
+                "created_at": now.isoformat(),
+            })
+            logger.info(f"[REMINDER SET] '{task}' at {dt_str}")
+            return f"Reminder set for {time_str}: {task}."
+        else:
+            # Fallback: store raw time so check_reminders can attempt to parse it
+            user.add_reminder({
+                "time": time_str,
+                "message": task,
+                "description": task,
+                "done": False,
+                "created_at": now.isoformat(),
+            })
+            logger.info(f"[REMINDER SET] '{task}' at {time_str} (raw)")
+            return f"Reminder set for {time_str}: {task}."
+    except Exception as e:
+        logger.error(f"Direct reminder set error: {e}")
+        return "I had trouble setting that reminder."
 
 
 def handle_command(intent: str, text: str) -> tuple:
