@@ -190,6 +190,33 @@ def handle_location_command(text: str) -> str:
         return "I couldn't parse your location. Could you tell me your city?"
 
 
+def handle_set_name(name: str) -> str:
+    """Save the user's name to their profile."""
+    try:
+        name = name.strip().title()
+        user = get_current_user()
+        user.update_name(name)
+        logger.info(f"[NAME] Set user name to: {name}")
+        return f"Got it! I'll call you {name} from now on."
+    except Exception as e:
+        logger.error(f"Set name error: {e}")
+        return "I had trouble saving your name, but I'll remember it for this session."
+
+
+def handle_set_location(city: str) -> str:
+    """Save the user's city/location to their profile."""
+    try:
+        city = city.strip().title()
+        user = get_current_user()
+        user.data["location"] = city
+        user.save_profile()
+        logger.info(f"[LOCATION] Set user location to: {city}")
+        return f"Got it! I've saved that you're in {city}. I can now fetch weather for you there."
+    except Exception as e:
+        logger.error(f"Set location error: {e}")
+        return "I had trouble saving your location."
+
+
 def handle_command(intent: str, text: str) -> tuple:
     """
     Handle a command and return (response, should_skip_llm)

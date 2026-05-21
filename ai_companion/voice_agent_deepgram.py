@@ -176,9 +176,19 @@ class DeepgramVoiceAgent:
                         "temperature": 0.7,
                     },
                     "functions": functions,
-                    "prompt": "You are JARVIS, a warm, intelligent AI companion. "
-                             "Help the user with their tasks and questions. "
-                             "When appropriate, use available functions to help.",
+                    "prompt": (
+                        "You are JARVIS, a warm, intelligent AI companion. "
+                        "CRITICAL SPEECH RULES — follow these at all times: "
+                        "1. NEVER use markdown formatting. No asterisks (**bold**), no underscores (_italic_), no dash lists (- item), no numbered lists (1. item), no pound signs (# header). Speak in plain natural flowing sentences only. "
+                        "2. Be concise and warm. Give short, friendly answers like a trusted companion talking out loud — not like a written document. "
+                        "3. Address the user by their first name whenever you know it. "
+                        "4. If the user says their name (e.g. 'my name is Alex', 'call me Alex', 'I am Alex', 'change my name to Alex'), call the set_name function immediately with that name. "
+                        "5. If the user mentions where they live or their city (e.g. 'I live in Lagos', 'I am in Abuja', 'my city is Kano'), call the set_location function with that city name. "
+                        "6. For weather, ALWAYS call get_weather — never guess the weather. "
+                        "7. For time or date, always call get_time or get_date. "
+                        "8. Respond naturally when greeted with 'Hello Jarvis', 'Hey Jarvis', or just 'Jarvis'. "
+                        "9. When a reminder is injected, speak it naturally and warmly, like: 'Just a heads up — it's time to take your medication!' "
+                    ),
                 },
                 "speak": {
                     "provider": {
@@ -190,6 +200,15 @@ class DeepgramVoiceAgent:
             },
         }
         return config
+
+    async def inject_agent_message(self, message: str):
+        """Inject a message so the agent speaks it aloud (e.g. for reminders)."""
+        if self.ws and self.is_running:
+            try:
+                await self.ws.send(json.dumps({"type": "InjectAgentMessage", "message": message}))
+                logger.info(f"[INJECT] Agent message injected: {message[:60]}")
+            except Exception as e:
+                logger.error(f"[INJECT] Failed: {e}")
 
     async def send_audio(self, audio_data: bytes):
         """Send audio data to the agent as binary WebSocket frame."""
@@ -572,11 +591,55 @@ class VoiceAgentThread(threading.Thread):
         """Register a function (must be called before thread starts)."""
         self.agent.register_function(name, description, parameters, handler, client_side)
 
+    def _alarm_checker_thread(self):
+        """Background thread: checks alarms/reminders every 5s and fires audio+speech."""
+        import time as _time
+        import winsound
+        from pathlib import Path
+
+        alarm_wav = str(Path(__file__).parent / "alarm.wav")
+
+        while not self._stop_event.is_set():
+            _time.sleep(5)
+            try:
+                from reminders import check_reminders
+                from alarms import check_alarms
+
+                # --- REMINDERS: alarm sound + agent speaks the message ---
+                due_reminders = check_reminders()
+                for msg in due_reminders:
+                    logger.info(f"[REMINDER] Due: {msg}")
+                    try:
+                        winsound.PlaySound(alarm_wav, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                    except Exception as e:
+                        logger.warning(f"[ALARM SOUND] {e}")
+                    if self.loop and not self.loop.is_closed():
+                        speak_text = f"Reminder for you: {msg}"
+                        asyncio.run_coroutine_threadsafe(
+                            self.agent.inject_agent_message(speak_text), self.loop
+                        )
+
+                # --- ALARMS: alarm sound only (no speech) ---
+                due_alarms = check_alarms()
+                for note in due_alarms:
+                    logger.info(f"[ALARM] Due: {note}")
+                    try:
+                        winsound.PlaySound(alarm_wav, winsound.SND_FILENAME)
+                    except Exception as e:
+                        logger.warning(f"[ALARM SOUND] {e}")
+
+            except Exception as e:
+                logger.error(f"[ALARM CHECKER] Error: {e}")
+
     def run(self):
         """Run the agent in the background thread."""
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        
+
+        # Start background alarm/reminder checker
+        alarm_thread = threading.Thread(target=self._alarm_checker_thread, daemon=True)
+        alarm_thread.start()
+
         try:
             self.loop.run_until_complete(self.agent.run())
         except Exception as e:
@@ -586,6 +649,7 @@ class VoiceAgentThread(threading.Thread):
 
     def stop(self):
         """Stop the agent."""
+        self._stop_event.set()
         self.agent.is_running = False
         # Close websocket to unblock ws.recv() in receive_messages
         if self.agent.ws and self.loop and not self.loop.is_closed():
@@ -605,6 +669,8 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         handle_set_alarm,
         handle_check_reminders,
         handle_set_reminder,
+        handle_set_name,
+        handle_set_location,
     )
     from user_manager import get_current_user
 
@@ -684,6 +750,34 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
             "required": ["task"],
         },
         handler=lambda task, time="": handle_set_reminder(f"remind me to {task} at {time}"),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_name",
+        description="Save the user's name so JARVIS can address them personally",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "The user's first name"},
+            },
+            "required": ["name"],
+        },
+        handler=lambda name: handle_set_name(name),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_location",
+        description="Save the user's city/location for weather and local info",
+        parameters={
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "The user's city or location"},
+            },
+            "required": ["city"],
+        },
+        handler=lambda city: handle_set_location(city),
         client_side=True,
     )
 

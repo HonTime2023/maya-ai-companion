@@ -52,6 +52,23 @@ def add_reminder(time_str: str, message: str):
     return True
 
 
+def _parse_reminder_time(time_str: str) -> datetime:
+    """Try multiple datetime formats to parse a reminder time string."""
+    formats = [
+        "%Y-%m-%d %H:%M",          # 2026-05-21 13:15  (canonical)
+        "%Y-%m-%d at %I:%M %p",    # 2026-05-21 at 1:15 PM
+        "%Y-%m-%d at %I %p",       # 2026-05-21 at 1 PM
+        "%Y-%m-%dT%H:%M:%S",       # ISO format
+        "%Y-%m-%dT%H:%M",
+    ]
+    for fmt in formats:
+        try:
+            return datetime.strptime(time_str.strip(), fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Cannot parse reminder time: '{time_str}'")
+
+
 def check_reminders():
     """
     Check for reminders that are due.
@@ -66,26 +83,21 @@ def check_reminders():
             continue
 
         try:
-            # Handle new format
             if "datetime" in r:
-                reminder_time = datetime.strptime(r["datetime"], "%Y-%m-%d %H:%M")
-            # Handle old format for migration
+                reminder_time = _parse_reminder_time(r["datetime"])
             elif "time" in r:
                 today = now.strftime("%Y-%m-%d")
-                reminder_time = datetime.strptime(
-                    f"{today} {r['time']}", "%Y-%m-%d %H:%M"
-                )
+                reminder_time = _parse_reminder_time(f"{today} {r['time']}")
             else:
                 continue
 
             if reminder_time <= now:
-                due.append(r.get("message", "Reminder"))
+                due.append(r.get("message", r.get("description", "Reminder")))
                 r["done"] = True
 
         except Exception as e:
             print(f"⚠️ Error checking reminder: {e}")
 
-    # Save updated reminders
     if any(not r.get("done") for r in reminders):
         save_reminders(reminders)
 
