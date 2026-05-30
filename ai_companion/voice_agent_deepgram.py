@@ -179,7 +179,7 @@ class DeepgramVoiceAgent:
                     "prompt": (
                         "You are JARVIS, a warm, intelligent AI companion. "
                         "CRITICAL SPEECH RULES — follow these at all times: "
-                        "1. NEVER use markdown formatting. No asterisks (**bold**), no underscores (_italic_), no dash lists (- item), no numbered lists (1. item), no pound signs (# header). Speak in plain natural flowing sentences only. "
+                        "1. NEVER use markdown formatting of any kind. No asterisks (*), no double asterisks (**), no underscores, no dashes for lists, no numbered lists, no pound signs. The TTS will speak every character literally so asterisks will be heard as 'asterisk'. Use only plain natural sentences. "
                         "2. Be concise and warm. Give short, friendly answers like a trusted companion talking out loud — not like a written document. "
                         "3. Address the user by their first name whenever you know it. "
                         "4. If the user says their name (e.g. 'my name is Alex', 'call me Alex', 'I am Alex', 'change my name to Alex'), call the set_name function immediately with that name. "
@@ -192,6 +192,11 @@ class DeepgramVoiceAgent:
                         "11. When the user says anything like 'reminder off', 'stop reminder', 'dismiss reminder', or 'silence reminder', call the stop_reminder function immediately. "
                         "12. When an alarm or reminder notification is injected and you speak it, do NOT call any other functions. Simply speak the notification warmly and wait for the user. "
                         "13. When you receive weather data from get_weather or get_weather_forecast, always translate it into friendly everyday language. Tell the user what to expect and what to do — like 'it will be hot and humid, stay hydrated' or 'there is a good chance of rain, carry an umbrella'. Never just read numbers — make it feel helpful and human. "
+                        "14. NEVER say any acknowledgment or filler phrase before or after calling a function. No 'Let me check', 'Sure', 'Give me a second', 'Let me pull that up', 'Of course'. Call the function silently and speak only when you have the final answer. "
+                        "15. When listing multiple days or items, speak in flowing sentences. Example: 'Monday will be hot and sunny, Tuesday looks rainy so carry an umbrella, and Wednesday will cool down.' Never use bullet points or line breaks. "
+                        "16. Health tracking: when the user mentions sleep, water, mood, symptoms, exercise, or medication, call the appropriate health function to log it. Examples: 'I slept 7 hours' → call log_sleep. 'I drank 2 glasses of water' → call log_water. 'I am feeling anxious' → call log_mood. 'I have a headache' → call log_symptom. 'I went for a run for 30 minutes' → call log_exercise. 'I took my Metformin' → call log_medication_taken. "
+                        "17. When the user asks 'how am I doing health-wise', 'health summary', or 'my wellness score', call get_health_summary or get_wellness_score. "
+                        "18. When the user says things like 'add Metformin to my medications' or 'I take Lisinopril in the morning', call add_medication. When the user says 'I have diabetes' or 'I have hypertension', call add_health_condition. "
                     ),
                 },
                 "speak": {
@@ -618,7 +623,7 @@ class VoiceAgentThread(threading.Thread):
         from pathlib import Path
 
         # Regular alarm/reminder chime — pleasant tone (loops until stopped)
-        alarm_chime_wav = r"C:\Windows\Media\Alarm01.wav"
+        alarm_chime_wav = r"C:\Users\Dell\Downloads\AI_Companion\ai_companion\Alarm01.wav"
         # Emergency sound — kept for the emergency feature
         emergency_wav = str(Path(__file__).parent / "alarm.wav")  # noqa: F841
 
@@ -757,6 +762,15 @@ class VoiceAgentThread(threading.Thread):
         # Start background alarm/reminder checker
         alarm_thread = threading.Thread(target=self._alarm_checker_thread, daemon=True)
         alarm_thread.start()
+
+        # Start proactive health check-in threads
+        try:
+            from health_checkin import HealthCheckinManager
+            self._health_checkin = HealthCheckinManager(self)
+            self._health_checkin.start()
+            logger.info("[HEALTH] Proactive health check-in manager started")
+        except Exception as e:
+            logger.warning(f"[HEALTH] Could not start health check-in manager: {e}")
 
         try:
             self.loop.run_until_complete(self.agent.run())
@@ -923,6 +937,160 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         description="Dismiss a currently ringing reminder chime",
         parameters={"type": "object", "properties": {}},
         handler=_stop_reminder_handler,
+        client_side=True,
+    )
+
+    from health_analysis import (
+        log_sleep, log_water, log_mood, log_symptom, log_exercise,
+        log_medication_taken, add_medication, add_health_condition,
+        set_health_emergency_contact, get_health_summary, get_wellness_score,
+    )
+
+    agent.register_function(
+        name="log_sleep",
+        description="Log how many hours the user slept last night, and optional quality (good/fair/poor)",
+        parameters={
+            "type": "object",
+            "properties": {
+                "hours": {"type": "number", "description": "Hours of sleep"},
+                "quality": {"type": "string", "description": "Sleep quality: good, fair, or poor"},
+            },
+            "required": ["hours"],
+        },
+        handler=lambda hours, quality="fair": log_sleep(hours, quality),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="log_water",
+        description="Log glasses of water the user has drunk",
+        parameters={
+            "type": "object",
+            "properties": {
+                "glasses": {"type": "integer", "description": "Number of glasses drunk"},
+            },
+            "required": ["glasses"],
+        },
+        handler=lambda glasses=1: log_water(glasses),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="log_mood",
+        description="Log the user's current mood or emotional state",
+        parameters={
+            "type": "object",
+            "properties": {
+                "mood": {"type": "string", "description": "Mood description e.g. happy, anxious, tired"},
+                "score": {"type": "integer", "description": "Optional mood score 1-10"},
+            },
+            "required": ["mood"],
+        },
+        handler=lambda mood, score=None: log_mood(mood, score),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="log_symptom",
+        description="Log a health symptom the user is experiencing",
+        parameters={
+            "type": "object",
+            "properties": {
+                "symptom": {"type": "string", "description": "Symptom description e.g. headache, nausea"},
+                "severity": {"type": "integer", "description": "Severity 1-10 (optional)"},
+            },
+            "required": ["symptom"],
+        },
+        handler=lambda symptom, severity=5: log_symptom(symptom, severity),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="log_exercise",
+        description="Log a physical activity the user completed",
+        parameters={
+            "type": "object",
+            "properties": {
+                "activity": {"type": "string", "description": "Activity name e.g. running, yoga, walking"},
+                "duration_minutes": {"type": "integer", "description": "Duration in minutes"},
+            },
+            "required": ["activity", "duration_minutes"],
+        },
+        handler=lambda activity, duration_minutes: log_exercise(activity, duration_minutes),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="log_medication_taken",
+        description="Mark a medication as taken for today",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Medication name"},
+            },
+            "required": ["name"],
+        },
+        handler=lambda name: log_medication_taken(name),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="add_medication",
+        description="Add a medication to the user's health profile with dosage and schedule",
+        parameters={
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Medication name"},
+                "dosage": {"type": "string", "description": "Dosage e.g. 500mg (optional)"},
+                "times": {"type": "string", "description": "When to take: morning, afternoon, evening, night, bedtime"},
+            },
+            "required": ["name"],
+        },
+        handler=lambda name, dosage="", times="morning": add_medication(name, dosage, times),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="add_health_condition",
+        description="Add a medical condition to the user's health profile",
+        parameters={
+            "type": "object",
+            "properties": {
+                "condition": {"type": "string", "description": "Medical condition e.g. diabetes, hypertension"},
+            },
+            "required": ["condition"],
+        },
+        handler=lambda condition: add_health_condition(condition),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_health_emergency_contact",
+        description="Save an emergency contact phone number in international format",
+        parameters={
+            "type": "object",
+            "properties": {
+                "phone_number": {"type": "string", "description": "Phone number in international format e.g. +2348012345678"},
+            },
+            "required": ["phone_number"],
+        },
+        handler=lambda phone_number: set_health_emergency_contact(phone_number),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_health_summary",
+        description="Get a spoken health summary covering sleep, hydration, mood, exercise, and medications for today",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: get_health_summary(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_wellness_score",
+        description="Calculate and return the user's wellness score out of 100 based on recent health data",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: get_wellness_score(),
         client_side=True,
     )
 
