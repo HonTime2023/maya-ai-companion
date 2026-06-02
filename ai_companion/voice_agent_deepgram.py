@@ -202,6 +202,7 @@ class DeepgramVoiceAgent:
                         "21. SPOTIFY MUSIC: when the user says play [song, artist, or playlist], call play_spotify with the query. For a specific artist say 'play songs by [artist]' → call play_spotify_artist. For pause → pause_spotify. For resume → resume_spotify. For next or skip → skip_track. For previous or go back → previous_track. For volume → set_spotify_volume with the percent number. To know what is playing → get_now_playing. Never guess the playback state — always call the function. "
                         "22. TELEGRAM MESSAGING: when the user says send a message via Telegram, message someone, tell someone that, or send a Telegram saying, call send_telegram_message with the message text. When the user says send my health report to Telegram → call send_health_report_telegram. When asked if Telegram is set up or working → call check_telegram_status. "
                         "23. HEALTH NEWS: when the user asks for health news, health headlines, or news about a specific health topic like 'cancer news' or 'diabetes news', call get_health_news or get_health_news_by_topic with the topic keyword. "
+                        "24. MOTION SENSOR: when the user says 'start motion monitoring', 'watch for motion', 'enable motion detection' → call start_motion_monitoring. 'Stop motion monitoring' → call stop_motion_monitoring. 'Motion status' or 'is motion on' → call get_motion_status. 'Set motion cooldown to N seconds' → call set_motion_cooldown. "
                     ),
                 },
                 "speak": {
@@ -777,6 +778,14 @@ class VoiceAgentThread(threading.Thread):
         except Exception as e:
             logger.warning(f"[HEALTH] Could not start health check-in manager: {e}")
 
+        # Wire motion detector → agent inject
+        try:
+            from motion import attach_agent as _attach_motion
+            _attach_motion(self)
+            logger.info("[MOTION] Motion detector wired to agent")
+        except Exception as e:
+            logger.warning(f"[MOTION] Could not attach motion detector: {e}")
+
         try:
             self.loop.run_until_complete(self.agent.run())
         except Exception as e:
@@ -1310,6 +1319,51 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         description="Get the currently playing song on Spotify",
         parameters={"type": "object", "properties": {}},
         handler=lambda: _sp_now_playing(),
+        client_side=True,
+    )
+
+    from motion import (
+        start_motion_monitoring as _motion_start,
+        stop_motion_monitoring as _motion_stop,
+        get_motion_status as _motion_status,
+        set_motion_cooldown as _motion_cooldown,
+    )
+
+    agent.register_function(
+        name="start_motion_monitoring",
+        description="Start background motion monitoring via PIR sensor (Raspberry Pi) or webcam",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _motion_start(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="stop_motion_monitoring",
+        description="Stop background motion monitoring",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _motion_stop(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_motion_status",
+        description="Get the current motion monitoring status, backend type, and last detection time",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _motion_status(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_motion_cooldown",
+        description="Set how many seconds must pass between motion alerts to avoid repeated triggers",
+        parameters={
+            "type": "object",
+            "properties": {
+                "seconds": {"type": "integer", "description": "Cooldown in seconds (e.g. 30)"},
+            },
+            "required": ["seconds"],
+        },
+        handler=lambda seconds: _motion_cooldown(seconds),
         client_side=True,
     )
 
