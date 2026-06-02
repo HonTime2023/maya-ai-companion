@@ -13,7 +13,12 @@ def parse_reminder(text):
 
     target_time = None
 
-    # ---------- "in X minutes / hours" ----------
+    # ---------- "in X minutes / hours" / "in an hour" / "in half an hour" ----------
+    # normalise word-numbers before matching digits
+    text = re.sub(r"\bin a(n)?\b", "in 1", text)          # "in an hour" → "in 1 hour"
+    text = re.sub(r"\bhalf an hour\b", "30 minutes", text)  # "in half an hour" → "in 30 minutes"
+    text = re.sub(r"\ba (minute|min)\b", "1 \\1", text)    # "in a minute" → "in 1 minute"
+
     match = re.search(r"in (\d+) (minute|minutes|min|mins)", text)
     if match:
         mins = int(match.group(1))
