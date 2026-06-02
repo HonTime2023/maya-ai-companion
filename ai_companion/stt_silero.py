@@ -8,7 +8,7 @@ import numpy as np
 import time
 import os
 from scipy.io.wavfile import write
-from openai import OpenAI
+from openai import OpenAI  
 from dotenv import load_dotenv
 
 load_dotenv()

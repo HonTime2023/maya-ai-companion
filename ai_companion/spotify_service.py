@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
 
 logger = logging.getLogger("AI_Companion")
 
@@ -24,7 +24,7 @@ except ImportError:
 
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8888/callback")
+REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
 
 # Lazy singleton — only created on first use
 _sp = None
@@ -75,14 +75,23 @@ def _get_device_id(device_name=None):
         return None
     try:
         devices = sp.devices().get("devices", [])
-        if not devices:
+        if devices:
+            names = [d["name"] for d in devices]
+            logger.info(f"[SPOTIFY] Available devices: {names}")
+        else:
+            logger.warning("[SPOTIFY] No devices returned from Spotify API")
             return None
         if device_name:
             for d in devices:
                 if device_name.lower() in d["name"].lower():
                     return d["id"]
+        # Prefer active device, otherwise use first available
+        for d in devices:
+            if d.get("is_active"):
+                return d["id"]
         return devices[0]["id"]
-    except Exception:
+    except Exception as e:
+        logger.error(f"[SPOTIFY] device detection error: {e}")
         return None
 
 
@@ -100,29 +109,61 @@ def play_music(query: str) -> str:
         return _not_available()
 
     try:
-        device_id = _get_device_id()
-        if device_id is None:
-            return "No active Spotify device found. Open Spotify on your phone or computer first."
-
-        # Try as a track
+        # Search first (doesn't need a device)
         results = sp.search(q=query, type="track", limit=1)
         tracks = results.get("tracks", {}).get("items", [])
+
+        playlist_fallback = None
+        if not tracks:
+            results = sp.search(q=query, type="playlist", limit=1)
+            items = results.get("playlists", {}).get("items", [])
+            if items:
+                playlist_fallback = items[0]
+
+        if not tracks and not playlist_fallback:
+            return f"I could not find anything on Spotify matching '{query}'."
+
+        device_id = _get_device_id()
+        if device_id is None:
+            return (
+                "I found the song but Spotify has no active device. "
+                "Please open Spotify on your phone or PC, press play on any song for a moment, "
+                "then ask me again."
+            )
+
+        def _try_play(fn):
+            """Try playback, if 403/not-active try transfer first then retry."""
+            try:
+                fn()
+                return True
+            except Exception as e1:
+                logger.warning(f"[SPOTIFY] first play attempt failed ({e1}), trying transfer")
+                try:
+                    import time
+                    sp.transfer_playback(device_id=device_id, force_play=False)
+                    time.sleep(0.8)
+                    fn()
+                    return True
+                except Exception as e2:
+                    logger.error(f"[SPOTIFY] play after transfer failed: {e2}")
+                    return False
+
         if tracks:
             track = tracks[0]
             name = track["name"]
             artist = track["artists"][0]["name"]
-            sp.start_playback(device_id=device_id, uris=[track["uri"]])
-            return f"Now playing {name} by {artist}."
+            uri = track["uri"]
+            ok = _try_play(lambda: sp.start_playback(device_id=device_id, uris=[uri]))
+            if ok:
+                return f"Now playing {name} by {artist}."
+            return f"I found {name} by {artist} but could not start playback. Try pressing play in Spotify manually first."
 
-        # Fallback: try as a playlist
-        results = sp.search(q=query, type="playlist", limit=1)
-        playlists = results.get("playlists", {}).get("items", [])
-        if playlists:
-            pl = playlists[0]
-            sp.start_playback(device_id=device_id, context_uri=pl["uri"])
+        pl = playlist_fallback
+        ok = _try_play(lambda: sp.start_playback(device_id=device_id, context_uri=pl["uri"]))
+        if ok:
             return f"Now playing playlist: {pl['name']}."
+        return f"I found the playlist {pl['name']} but could not start playback."
 
-        return f"I could not find anything on Spotify matching '{query}'."
     except Exception as e:
         logger.error(f"[SPOTIFY] play_music error: {e}")
         return "I ran into an issue playing that on Spotify. Make sure Spotify is open on a device."
@@ -136,7 +177,7 @@ def play_artist_music(artist: str) -> str:
     try:
         device_id = _get_device_id()
         if device_id is None:
-            return "No active Spotify device found."
+            return "No active Spotify device found. Open Spotify and press play briefly, then try again."
         results = sp.search(q=artist, type="artist", limit=1)
         artists = results.get("artists", {}).get("items", [])
         if not artists:
