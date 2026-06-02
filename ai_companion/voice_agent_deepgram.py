@@ -197,6 +197,10 @@ class DeepgramVoiceAgent:
                         "16. Health tracking: when the user mentions sleep, water, mood, symptoms, exercise, or medication, call the appropriate health function to log it. Examples: 'I slept 7 hours' → call log_sleep. 'I drank 2 glasses of water' → call log_water. 'I am feeling anxious' → call log_mood. 'I have a headache' → call log_symptom. 'I went for a run for 30 minutes' → call log_exercise. 'I took my Metformin' → call log_medication_taken. "
                         "17. When the user asks 'how am I doing health-wise', 'health summary', or 'my wellness score', call get_health_summary or get_wellness_score. "
                         "18. When the user says things like 'add Metformin to my medications' or 'I take Lisinopril in the morning', call add_medication. When the user says 'I have diabetes' or 'I have hypertension', call add_health_condition. "
+                        "19. EMERGENCY: if the user says anything like 'emergency', 'help me', 'I need help', 'call for help', 'SOS', 'I am not okay', immediately call trigger_emergency. This is the highest priority action. Do not call trigger_emergency again if an emergency is already active. "
+                        "20. CANCEL EMERGENCY: if the user says any of these — 'cancel emergency', 'stop emergency', 'stop the alarm', 'I am safe', 'I am okay', 'I am okay now', 'all clear', 'false alarm', 'I am fine', 'stop alarm', 'disable emergency' — immediately call cancel_emergency. Do this even if the emergency was auto-cancelled by a Telegram reply. "
+                        "21. SPOTIFY MUSIC: when the user says play [song, artist, or playlist], call play_spotify with the query. For a specific artist say 'play songs by [artist]' → call play_spotify_artist. For pause → pause_spotify. For resume → resume_spotify. For next or skip → skip_track. For previous or go back → previous_track. For volume → set_spotify_volume with the percent number. To know what is playing → get_now_playing. Never guess the playback state — always call the function. "
+                        "22. TELEGRAM MESSAGING: when the user says send a message via Telegram, message someone, tell someone that, or send a Telegram saying, call send_telegram_message with the message text. When the user says send my health report to Telegram → call send_health_report_telegram. When asked if Telegram is set up or working → call check_telegram_status. "
                     ),
                 },
                 "speak": {
@@ -781,6 +785,7 @@ class VoiceAgentThread(threading.Thread):
 
     def stop(self):
         """Stop the agent."""
+        self._chime_stop_event.set()   # stop any looping chime before teardown
         self._stop_event.set()
         self.agent.is_running = False
         # Close websocket to unblock ws.recv() in receive_messages
@@ -945,6 +950,9 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         log_medication_taken, add_medication, add_health_condition,
         set_health_emergency_contact, get_health_summary, get_wellness_score,
     )
+    from emergency import trigger_emergency, cancel_emergency, set_doctor_contact
+    import threading as _threading
+    from pathlib import Path as _Path
 
     agent.register_function(
         name="log_sleep",
@@ -1091,6 +1099,187 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         description="Calculate and return the user's wellness score out of 100 based on recent health data",
         parameters={"type": "object", "properties": {}},
         handler=lambda: get_wellness_score(),
+        client_side=True,
+    )
+
+    # --- Emergency functions ---
+    def _trigger_emergency_handler():
+        # Start the emergency alarm chime
+        emergency_wav = str(_Path(__file__).parent / "alarm.wav")
+        agent._alarm_active.set()
+        agent._chime_stop_event.set()
+        import time as _t; _t.sleep(0.05)
+        agent._chime_stop_event.clear()
+        _threading.Thread(
+            target=agent._chime_loop_thread,
+            args=(emergency_wav,),
+            daemon=True,
+        ).start()
+        return trigger_emergency(agent_thread=agent)
+
+    def _cancel_emergency_handler():
+        agent._alarm_active.clear()
+        agent._chime_stop_event.set()
+        return cancel_emergency()
+
+    agent.register_function(
+        name="trigger_emergency",
+        description="Trigger an emergency SOS alert — sends Telegram message, starts alarm, repeats every 5 minutes",
+        parameters={"type": "object", "properties": {}},
+        handler=_trigger_emergency_handler,
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="cancel_emergency",
+        description="Cancel an active emergency alert and stop the alarm",
+        parameters={"type": "object", "properties": {}},
+        handler=_cancel_emergency_handler,
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_doctor_contact",
+        description="Save the user's doctor phone number in international format",
+        parameters={
+            "type": "object",
+            "properties": {
+                "number": {"type": "string", "description": "Doctor's phone number in international format"},
+            },
+            "required": ["number"],
+        },
+        handler=lambda number: set_doctor_contact(number),
+        client_side=True,
+    )
+
+    # --- Telegram voice functions ---
+    from telegram_service import (
+        send_voice_message as _tg_send,
+        send_health_report_telegram as _tg_health_report,
+        check_telegram_status as _tg_status,
+    )
+
+    agent.register_function(
+        name="send_telegram_message",
+        description="Send a custom text message to the user's Telegram contact",
+        parameters={
+            "type": "object",
+            "properties": {
+                "text": {"type": "string", "description": "Message text to send via Telegram"},
+            },
+            "required": ["text"],
+        },
+        handler=lambda text: _tg_send(text),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="send_health_report_telegram",
+        description="Generate and send the user's weekly health report via Telegram",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _tg_health_report(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="check_telegram_status",
+        description="Check whether Telegram is configured and the bot is reachable",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _tg_status(),
+        client_side=True,
+    )
+
+    # --- Spotify voice functions ---
+    from spotify_service import (
+        play_music as _sp_play,
+        play_artist_music as _sp_play_artist,
+        pause_music as _sp_pause,
+        resume_music as _sp_resume,
+        next_track as _sp_next,
+        previous_track as _sp_prev,
+        set_volume as _sp_volume,
+        get_now_playing as _sp_now_playing,
+    )
+
+    agent.register_function(
+        name="play_spotify",
+        description="Play a song or playlist by name on Spotify",
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Song name, playlist name, or search query"},
+            },
+            "required": ["query"],
+        },
+        handler=lambda query: _sp_play(query),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="play_spotify_artist",
+        description="Play music by a specific artist on Spotify",
+        parameters={
+            "type": "object",
+            "properties": {
+                "artist": {"type": "string", "description": "Artist name"},
+            },
+            "required": ["artist"],
+        },
+        handler=lambda artist: _sp_play_artist(artist),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="pause_spotify",
+        description="Pause Spotify playback",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _sp_pause(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="resume_spotify",
+        description="Resume Spotify playback",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _sp_resume(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="skip_track",
+        description="Skip to the next track on Spotify",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _sp_next(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="previous_track",
+        description="Go back to the previous track on Spotify",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _sp_prev(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="set_spotify_volume",
+        description="Set Spotify playback volume from 0 to 100",
+        parameters={
+            "type": "object",
+            "properties": {
+                "percent": {"type": "integer", "description": "Volume level 0-100"},
+            },
+            "required": ["percent"],
+        },
+        handler=lambda percent: _sp_volume(percent),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_now_playing",
+        description="Get the currently playing song on Spotify",
+        parameters={"type": "object", "properties": {}},
+        handler=lambda: _sp_now_playing(),
         client_side=True,
     )
 

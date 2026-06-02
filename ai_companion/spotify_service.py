@@ -1,149 +1,245 @@
+"""
+Spotify Service — Voice-callable Spotify playback control for JARVIS.
+All public functions return plain spoken strings.
+Gracefully handles missing credentials or unavailable Spotify.
+"""
+import logging
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+logger = logging.getLogger("AI_Companion")
+
+# Store OAuth cache next to this file so it's found regardless of cwd
+_CACHE_PATH = str(Path(__file__).parent / ".spotify_token_cache")
+
 try:
     import spotipy
     from spotipy.oauth2 import SpotifyOAuth
-    SPOTIFY_AVAILABLE = True
+    _SPOTIPY_AVAILABLE = True
 except ImportError:
-    SPOTIFY_AVAILABLE = False
+    _SPOTIPY_AVAILABLE = False
 
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI")
+REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8888/callback")
 
-sp = None
-if SPOTIFY_AVAILABLE:
-    scope = "user-read-playback-state user-modify-playback-state"
-    sp = spotipy.Spotify(
-        auth_manager=SpotifyOAuth(
-            client_id=CLIENT_ID,
-            client_secret=CLIENT_SECRET,
-            redirect_uri=REDIRECT_URI,
-            scope=scope,
-            open_browser=True,
+# Lazy singleton — only created on first use
+_sp = None
+SPOTIFY_AVAILABLE = False
+
+
+def _get_sp():
+    """Return authenticated Spotify client, or None if unavailable."""
+    global _sp, SPOTIFY_AVAILABLE
+    if _sp is not None:
+        return _sp
+    if not _SPOTIPY_AVAILABLE or not CLIENT_ID or not CLIENT_SECRET:
+        return None
+    try:
+        scope = (
+            "user-read-playback-state "
+            "user-modify-playback-state "
+            "user-read-currently-playing"
         )
-    )
-
-
-def get_device(device_name=None):
-    if not SPOTIFY_AVAILABLE or sp is None:
+        _sp = spotipy.Spotify(
+            auth_manager=SpotifyOAuth(
+                client_id=CLIENT_ID,
+                client_secret=CLIENT_SECRET,
+                redirect_uri=REDIRECT_URI,
+                scope=scope,
+                cache_path=_CACHE_PATH,
+                open_browser=True,
+            )
+        )
+        SPOTIFY_AVAILABLE = True
+        return _sp
+    except Exception as e:
+        logger.warning(f"[SPOTIFY] Init failed: {e}")
         return None
-    devices = sp.devices()["devices"]
 
-    if not devices:
+
+def _not_available() -> str:
+    if not _SPOTIPY_AVAILABLE:
+        return "The spotipy library is not installed. Run pip install spotipy to enable Spotify."
+    if not CLIENT_ID or not CLIENT_SECRET:
+        return "Spotify is not configured. Please add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to your .env file."
+    return "Spotify is not available right now."
+
+
+def _get_device_id(device_name=None):
+    sp = _get_sp()
+    if sp is None:
+        return None
+    try:
+        devices = sp.devices().get("devices", [])
+        if not devices:
+            return None
+        if device_name:
+            for d in devices:
+                if device_name.lower() in d["name"].lower():
+                    return d["id"]
+        return devices[0]["id"]
+    except Exception:
         return None
 
-    if device_name:
-        for d in devices:
-            if device_name.lower() in d["name"].lower():
-                return d["id"]
 
-    return devices[0]["id"]
+# ------------------------------------------------------------------ #
+# Voice-callable playback functions
+# ------------------------------------------------------------------ #
 
+def play_music(query: str) -> str:
+    """
+    Play a song, artist, or playlist by name.
+    Tries tracks first, then playlists.
+    """
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
 
-def play_song(query, device=None):
-    if not SPOTIFY_AVAILABLE or sp is None:
-        raise RuntimeError("Spotify not available")
-    results = sp.search(q=query, type="track", limit=1)
+    try:
+        device_id = _get_device_id()
+        if device_id is None:
+            return "No active Spotify device found. Open Spotify on your phone or computer first."
 
-    if not results["tracks"]["items"]:
-        return False
+        # Try as a track
+        results = sp.search(q=query, type="track", limit=1)
+        tracks = results.get("tracks", {}).get("items", [])
+        if tracks:
+            track = tracks[0]
+            name = track["name"]
+            artist = track["artists"][0]["name"]
+            sp.start_playback(device_id=device_id, uris=[track["uri"]])
+            return f"Now playing {name} by {artist}."
 
-    track_uri = results["tracks"]["items"][0]["uri"]
+        # Fallback: try as a playlist
+        results = sp.search(q=query, type="playlist", limit=1)
+        playlists = results.get("playlists", {}).get("items", [])
+        if playlists:
+            pl = playlists[0]
+            sp.start_playback(device_id=device_id, context_uri=pl["uri"])
+            return f"Now playing playlist: {pl['name']}."
 
-    device_id = get_device(device)
-
-    sp.start_playback(device_id=device_id, uris=[track_uri])
-
-    return True
-
-
-def play_playlist(query, device=None):
-    if not SPOTIFY_AVAILABLE or sp is None:
-        raise RuntimeError("Spotify not available")
-    results = sp.search(q=query, type="playlist", limit=1)
-
-    if not results["playlists"]["items"]:
-        return False
-
-    playlist_uri = results["playlists"]["items"][0]["uri"]
-
-    device_id = get_device(device)
-
-    sp.start_playback(device_id=device_id, context_uri=playlist_uri)
-
-    return True
-
-
-def play_artist(query, device=None):
-    if not SPOTIFY_AVAILABLE or sp is None:
-        raise RuntimeError("Spotify not available")
-    results = sp.search(q=query, type="artist", limit=1)
-
-    if not results["artists"]["items"]:
-        return False
-
-    artist_uri = results["artists"]["items"][0]["uri"]
-
-    device_id = get_device(device)
-
-    sp.start_playback(device_id=device_id, context_uri=artist_uri)
-
-    return True
+        return f"I could not find anything on Spotify matching '{query}'."
+    except Exception as e:
+        logger.error(f"[SPOTIFY] play_music error: {e}")
+        return "I ran into an issue playing that on Spotify. Make sure Spotify is open on a device."
 
 
-def play_music(device=None):
-    if not SPOTIFY_AVAILABLE or sp is None:
-        raise RuntimeError("Spotify not available")
-    # fallback playlist (Top Hits)
-    playlist = "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"
-    device_id = get_device(device)
-    sp.start_playback(device_id=device_id, context_uri=playlist)
+def play_artist_music(artist: str) -> str:
+    """Play music by a specific artist."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
+    try:
+        device_id = _get_device_id()
+        if device_id is None:
+            return "No active Spotify device found."
+        results = sp.search(q=artist, type="artist", limit=1)
+        artists = results.get("artists", {}).get("items", [])
+        if not artists:
+            return f"I could not find the artist {artist} on Spotify."
+        a = artists[0]
+        sp.start_playback(device_id=device_id, context_uri=a["uri"])
+        return f"Now playing music by {a['name']}."
+    except Exception as e:
+        logger.error(f"[SPOTIFY] play_artist error: {e}")
+        return f"I could not play {artist} right now."
 
 
-def pause_music():
-    """Pause the current playback"""
-    if not SPOTIFY_AVAILABLE or sp is None:
-        raise RuntimeError("Spotify not available")
-
+def pause_music() -> str:
+    """Pause Spotify playback."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
     try:
         sp.pause_playback()
-        return True
+        return "Music paused."
     except Exception:
-        return False
+        return "I could not pause the music. Spotify may not be playing anything."
 
 
-def resume_music():
-    """Resume playback"""
-    if not SPOTIFY_AVAILABLE or sp is None:
-        return False
+def resume_music() -> str:
+    """Resume Spotify playback."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
     try:
         sp.start_playback()
-        return True
+        return "Music resumed."
     except Exception:
-        return False
+        return "I could not resume the music."
 
 
-def next_track():
-    """Skip to next track"""
-    if not SPOTIFY_AVAILABLE or sp is None:
-        return False
+def next_track() -> str:
+    """Skip to the next track."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
     try:
         sp.next_track()
-        return True
+        return "Skipping to the next track."
     except Exception:
-        return False
+        return "I could not skip the track right now."
 
 
-def previous_track():
-    """Go back to previous track"""
-    if not SPOTIFY_AVAILABLE or sp is None:
-        return False
+def previous_track() -> str:
+    """Go back to the previous track."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
     try:
         sp.previous_track()
-        return True
+        return "Going back to the previous track."
     except Exception:
-        return False
+        return "I could not go back to the previous track."
+
+
+def set_volume(percent: int) -> str:
+    """Set Spotify playback volume (0-100)."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
+    try:
+        percent = max(0, min(100, int(percent)))
+        device_id = _get_device_id()
+        sp.volume(percent, device_id=device_id)
+        return f"Volume set to {percent} percent."
+    except Exception:
+        return "I could not change the volume right now."
+
+
+def get_now_playing() -> str:
+    """Return what is currently playing on Spotify."""
+    sp = _get_sp()
+    if sp is None:
+        return _not_available()
+    try:
+        current = sp.current_playback()
+        if current is None or not current.get("is_playing"):
+            return "Nothing is currently playing on Spotify."
+        item = current.get("item")
+        if item:
+            name = item["name"]
+            artist = item["artists"][0]["name"]
+            return f"Currently playing {name} by {artist}."
+        return "Something is playing on Spotify but I could not get the track details."
+    except Exception:
+        return "I could not check what is playing on Spotify right now."
+
+
+# ---------------------------------------------------------------------------
+# Legacy compatibility aliases (used by old main.py pipeline)
+# ---------------------------------------------------------------------------
+def play_song(query: str, device=None) -> bool:
+    """Legacy wrapper — returns True/False for old pipeline."""
+    result = play_music(query)
+    return not result.startswith("I could not") and not result.startswith("No active")
+
+
+def play_artist(query: str, device=None) -> bool:
+    """Legacy wrapper."""
+    result = play_artist_music(query)
+    return not result.startswith("I could not") and not result.startswith("No active")
