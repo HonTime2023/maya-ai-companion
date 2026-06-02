@@ -201,6 +201,7 @@ class DeepgramVoiceAgent:
                         "20. CANCEL EMERGENCY: if the user says any of these — 'cancel emergency', 'stop emergency', 'stop the alarm', 'I am safe', 'I am okay', 'I am okay now', 'all clear', 'false alarm', 'I am fine', 'stop alarm', 'disable emergency' — immediately call cancel_emergency. Do this even if the emergency was auto-cancelled by a Telegram reply. "
                         "21. SPOTIFY MUSIC: when the user says play [song, artist, or playlist], call play_spotify with the query. For a specific artist say 'play songs by [artist]' → call play_spotify_artist. For pause → pause_spotify. For resume → resume_spotify. For next or skip → skip_track. For previous or go back → previous_track. For volume → set_spotify_volume with the percent number. To know what is playing → get_now_playing. Never guess the playback state — always call the function. "
                         "22. TELEGRAM MESSAGING: when the user says send a message via Telegram, message someone, tell someone that, or send a Telegram saying, call send_telegram_message with the message text. When the user says send my health report to Telegram → call send_health_report_telegram. When asked if Telegram is set up or working → call check_telegram_status. "
+                        "23. HEALTH NEWS: when the user asks for health news, health headlines, or news about a specific health topic like 'cancer news' or 'diabetes news', call get_health_news or get_health_news_by_topic with the topic keyword. "
                     ),
                 },
                 "speak": {
@@ -950,6 +951,7 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         log_medication_taken, add_medication, add_health_condition,
         set_health_emergency_contact, get_health_summary, get_wellness_score,
     )
+    from health_news import get_health_news, get_health_news_by_topic
     from emergency import trigger_emergency, cancel_emergency, set_doctor_contact
     import threading as _threading
     from pathlib import Path as _Path
@@ -1099,6 +1101,34 @@ def create_voice_agent_with_functions() -> VoiceAgentThread:
         description="Calculate and return the user's wellness score out of 100 based on recent health data",
         parameters={"type": "object", "properties": {}},
         handler=lambda: get_wellness_score(),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_health_news",
+        description="Fetch the latest health news headlines. Optional topic filter like 'cancer', 'diabetes', 'heart disease'.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "Optional health topic to filter news (e.g. cancer, diabetes, mental health)"},
+                "count": {"type": "integer", "description": "Number of headlines to return, default 3"},
+            },
+        },
+        handler=lambda topic=None, count=3: get_health_news(topic=topic, count=count),
+        client_side=True,
+    )
+
+    agent.register_function(
+        name="get_health_news_by_topic",
+        description="Search health news for a specific topic like 'diabetes', 'cancer', 'heart disease', 'mental health'",
+        parameters={
+            "type": "object",
+            "properties": {
+                "topic": {"type": "string", "description": "The health topic to search for"},
+            },
+            "required": ["topic"],
+        },
+        handler=lambda topic: get_health_news_by_topic(topic),
         client_side=True,
     )
 
