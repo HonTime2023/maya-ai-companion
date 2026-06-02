@@ -194,17 +194,6 @@
 
 ---
 
-## 🔍 Motion Sensor
-
-110. "Start motion monitoring."
-111. "Turn on the motion sensor."
-112. "Stop motion monitoring."
-113. "Turn off the motion sensor."
-114. "What's the status of the motion sensor?"
-115. "Is motion detection running?"
-116. "Set motion cooldown to 60 seconds."
-117. "Change the motion alert cooldown to 2 minutes."
-
 ---
 
 ## 👤 Personal Profile
