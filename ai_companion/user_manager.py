@@ -72,9 +72,16 @@ class UserProfile:
             json.dump(self.data, f, indent=2)
 
     def update_name(self, name: str):
-        """Update user's display name and mark as no longer new."""
+        """Update user's display name, track history, and mark as no longer new."""
+        old = self.data.get("name", "")
+        if old and old != name and old not in (self.user_id, "User", ""):
+            history = self.data.setdefault("name_history", [])
+            from datetime import datetime as _dt
+            history.append({"name": old, "changed_at": _dt.now().strftime("%b %d, %Y")})
+            # Keep last 5 entries
+            self.data["name_history"] = history[-5:]
         self.data["name"] = name
-        self.data["is_new_user"] = False  # Mark as having introduced themselves
+        self.data["is_new_user"] = False
         self.save_profile()
 
     def get_name(self) -> str:

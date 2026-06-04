@@ -69,23 +69,96 @@ def _not_available() -> str:
     return "Spotify is not available right now."
 
 
-def _get_device_id(device_name=None):
+def _launch_spotify_and_wait() -> bool:
+    """
+    Attempt to open the Spotify desktop app, then wait up to 12 s for a
+    device to become visible via the Spotify API.
+    Returns True if a device appeared, False otherwise.
+    """
+    import subprocess, time, sys
+
+    launched = False
+    # Try the Spotify URI scheme first (works on Windows/macOS/Linux)
+    try:
+        if sys.platform.startswith("win"):
+            # os.startfile is the most reliable way to open a URI on Windows
+            import os as _os
+            _os.startfile("spotify:")
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "spotify:"])
+        else:
+            subprocess.Popen(["xdg-open", "spotify:"])
+        launched = True
+        logger.info("[SPOTIFY] Sent open command for Spotify app")
+    except Exception as e:
+        logger.warning(f"[SPOTIFY] Could not launch Spotify via URI: {e}")
+
+    if not launched:
+        return False
+
+    # Poll for up to 9 s (Spotify typically registers within 5–8 s)
+    sp = _get_sp()
+    for _ in range(6):
+        time.sleep(1.5)
+        try:
+            devices = sp.devices().get("devices", [])
+            if devices:
+                logger.info(f"[SPOTIFY] Device appeared after launch: {[d['name'] for d in devices]}")
+                return True
+        except Exception:
+            pass
+    return False
+
+
+# Hints that refer to a remote device we cannot launch automatically
+_REMOTE_HINTS = {"phone", "mobile", "android", "iphone", "smartphone"}
+
+
+# Maps user hints to Spotify device type strings
+_DEVICE_TYPE_HINTS = {
+    "phone": "smartphone",
+    "mobile": "smartphone",
+    "android": "smartphone",
+    "iphone": "smartphone",
+    "pc": "computer",
+    "computer": "computer",
+    "laptop": "computer",
+    "desktop": "computer",
+    "windows": "computer",
+    "mac": "computer",
+}
+
+
+def _get_device_id(device_hint=None):
     sp = _get_sp()
     if sp is None:
         return None
     try:
         devices = sp.devices().get("devices", [])
         if devices:
-            names = [d["name"] for d in devices]
+            names = [f"{d['name']} ({d.get('type','?')})" for d in devices]
             logger.info(f"[SPOTIFY] Available devices: {names}")
         else:
             logger.warning("[SPOTIFY] No devices returned from Spotify API")
             return None
-        if device_name:
+
+        # If a hint was given, first try to match by device type
+        if device_hint:
+            target_type = _DEVICE_TYPE_HINTS.get(device_hint.lower())
+            if target_type:
+                # Prefer active device of that type, then any device of that type
+                for d in devices:
+                    if d.get("type", "").lower() == target_type and d.get("is_active"):
+                        return d["id"]
+                for d in devices:
+                    if d.get("type", "").lower() == target_type:
+                        return d["id"]
+            # Fallback: try matching hint against device name
             for d in devices:
-                if device_name.lower() in d["name"].lower():
+                if device_hint.lower() in d["name"].lower():
                     return d["id"]
-        # Prefer active device, otherwise use first available
+
+        # No hint or no match — prefer active device, otherwise use first available
         for d in devices:
             if d.get("is_active"):
                 return d["id"]
@@ -99,9 +172,10 @@ def _get_device_id(device_name=None):
 # Voice-callable playback functions
 # ------------------------------------------------------------------ #
 
-def play_music(query: str) -> str:
+def play_music(query: str, device_hint: str = None) -> str:
     """
     Play a song, artist, or playlist by name.
+    device_hint: optional string like 'phone', 'pc', 'laptop', 'computer' to target a device.
     Tries tracks first, then playlists.
     """
     sp = _get_sp()
@@ -123,13 +197,24 @@ def play_music(query: str) -> str:
         if not tracks and not playlist_fallback:
             return f"I could not find anything on Spotify matching '{query}'."
 
-        device_id = _get_device_id()
+        device_id = _get_device_id(device_hint)
         if device_id is None:
-            return (
-                "I found the song but Spotify has no active device. "
-                "Please open Spotify on your phone or PC, press play on any song for a moment, "
-                "then ask me again."
-            )
+            is_remote = device_hint and device_hint.lower() in _REMOTE_HINTS
+            if is_remote:
+                return (
+                    "I found the song but Spotify isn't open on your phone. "
+                    "Please open the Spotify app on your phone and ask me again."
+                )
+            logger.info("[SPOTIFY] No device found — attempting to launch Spotify automatically")
+            appeared = _launch_spotify_and_wait()
+            if appeared:
+                device_id = _get_device_id(device_hint)
+            if device_id is None:
+                return (
+                    "I found the song but Spotify isn't open on any device. "
+                    "I tried to launch it but it didn't respond in time. "
+                    "Please open Spotify on your PC and ask me again."
+                )
 
         def _try_play(fn):
             """Try playback, if 403/not-active try transfer first then retry."""
@@ -169,15 +254,26 @@ def play_music(query: str) -> str:
         return "I ran into an issue playing that on Spotify. Make sure Spotify is open on a device."
 
 
-def play_artist_music(artist: str) -> str:
+def play_artist_music(artist: str, device_hint: str = None) -> str:
     """Play music by a specific artist."""
     sp = _get_sp()
     if sp is None:
         return _not_available()
     try:
-        device_id = _get_device_id()
+        device_id = _get_device_id(device_hint)
         if device_id is None:
-            return "No active Spotify device found. Open Spotify and press play briefly, then try again."
+            is_remote = device_hint and device_hint.lower() in _REMOTE_HINTS
+            if is_remote:
+                return (
+                    "Spotify isn't open on your phone. "
+                    "Please open the Spotify app on your phone and ask me again."
+                )
+            logger.info("[SPOTIFY] No device found — attempting to launch Spotify automatically")
+            appeared = _launch_spotify_and_wait()
+            if appeared:
+                device_id = _get_device_id(device_hint)
+            if device_id is None:
+                return "No active Spotify device found. I tried to launch it but it didn't respond. Please open Spotify and try again."
         results = sp.search(q=artist, type="artist", limit=1)
         artists = results.get("artists", {}).get("items", [])
         if not artists:
@@ -269,6 +365,62 @@ def get_now_playing() -> str:
         return "Something is playing on Spotify but I could not get the track details."
     except Exception:
         return "I could not check what is playing on Spotify right now."
+
+
+def get_now_playing_structured() -> dict:
+    """Return structured info about the currently playing track (for lyrics lookup)."""
+    sp = _get_sp()
+    if sp is None:
+        return {"is_playing": False}
+    try:
+        current = sp.current_playback()
+        if not current or not current.get("is_playing"):
+            return {"is_playing": False}
+        item = current.get("item")
+        if item:
+            return {
+                "is_playing":  True,
+                "track":       item["name"],
+                "artist":      item["artists"][0]["name"],
+                "progress_ms": current.get("progress_ms", 0),
+                "duration_ms": item.get("duration_ms", 0),
+            }
+    except Exception:
+        pass
+    return {"is_playing": False}
+
+
+def close_spotify() -> str:
+    """Pause playback then close/quit the Spotify desktop app."""
+    import subprocess as _sp
+    import sys as _sys
+    # Pause playback first so it doesn't resume on next open
+    sp = _get_sp()
+    if sp:
+        try:
+            sp.pause_playback()
+        except Exception:
+            pass
+    # Kill the desktop process
+    try:
+        if _sys.platform.startswith("win"):
+            result = _sp.run(
+                ["taskkill", "/f", "/im", "Spotify.exe"],
+                capture_output=True, text=True
+            )
+            if result.returncode == 0:
+                return "Spotify has been closed."
+            else:
+                return "Music paused. Spotify desktop app wasn't running or could not be closed."
+        elif _sys.platform == "darwin":
+            _sp.run(["osascript", "-e", 'quit app "Spotify"'], capture_output=True)
+            return "Spotify has been closed."
+        else:
+            _sp.run(["pkill", "-x", "spotify"], capture_output=True)
+            return "Spotify has been closed."
+    except Exception as e:
+        logger.error(f"[SPOTIFY] close error: {e}")
+        return "Music paused but I could not close the Spotify app."
 
 
 # ---------------------------------------------------------------------------

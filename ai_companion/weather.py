@@ -1,7 +1,12 @@
+import os
 import requests
 from datetime import datetime, timedelta
+from pathlib import Path
+from dotenv import load_dotenv
 
-API_KEY = "***REMOVED-EXPOSED-API-KEY***"
+load_dotenv(Path(__file__).parent / ".env")
+
+API_KEY = os.getenv("WEATHER_API_KEY")
 BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
 
