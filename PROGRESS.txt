@@ -1,0 +1,237 @@
+================================================================
+  AI COMPANION (JARVIS) - COMMIT HISTORY & PROGRESS LOG
+================================================================
+
+TAG: v1.0-rpi-ready  <-- DEPLOY THIS ON RASPBERRY PI FIRST
+     Commit: 77427ca (HEAD -> main)
+     This is the stable baseline before major feature expansion.
+     All features below are tested and working at this point.
+
+----------------------------------------------------------------
+COMMIT LOG (newest first)
+----------------------------------------------------------------
+
+[77427ca]  TAG: v1.0-rpi-ready
+feat: add webapp UI with Spotify lyrics sync, teleprompter-style LRC display,
+      RAF-based sync engine, and instrumental handling
+- Full webapp (FastAPI + Vanilla JS) at webapp/
+- Teleprompter-style synced lyrics card with LRC timestamp support
+- requestAnimationFrame continuous sync engine (no drift)
+- Instrumental intro + mid-song instrumental gap handling
+- SYNCED badge, gradient fade mask, cyan glow on active line
+- Spotify now-playing card, weather card, health summary card
+- Cards: reminders, alarms, motion, telegram, health report
+- WebSocket voice agent bridge (browser mic -> Deepgram -> speaker)
+- Cache busting v=14
+
+[e84fbbf]
+docs: update Questions.md
+- Expanded interaction examples for JARVIS
+
+[74bfba8]
+chore: remove torch/silero-vad cluster from requirements (~2GB unused)
+- Slimmed down requirements.txt significantly
+- Improves install speed and RPi compatibility
+
+[a1b107d]
+chore: add requirements.txt frozen from cleanenv
+- Full reproducible dependency list
+
+[1b6ae59]
+docs: add Questions.md with 133 ways to interact with JARVIS
+- Comprehensive guide of all voice commands and questions
+
+[7f1a770]
+feat: reminder asks for task, alarm parser relative time fixes, README
+- Reminders now ask "what should I remind you about?" if no task given
+- Alarm parser handles "in 10 minutes", "tomorrow at 9am"
+- README updated with setup instructions
+
+[29d3f24]
+feat: motion detection module - RPi GPIO/webcam/simulation backends, voice-callable, agent-integrated
+- RPi GPIO backend (PIR sensor)
+- Webcam backend (OpenCV frame-diff)
+- Simulation backend (for dev/testing)
+- Voice: "start motion detection", "stop motion detection", "any motion?"
+- Telegram alerts on motion events
+
+[575faa5]
+feat: add health news module (free RSS feeds, no API key needed)
+- Fetches live health news from RSS
+- Summarized and read aloud on request
+- No external API key required
+
+[784646d]
+fix: Spotify OAuth working - correct client secret, explicit dotenv path, token cached
+- Fixed .env path loading issue
+- Token cache persists across restarts
+
+[e64b701]
+feat: Telegram auto-cancel emergency on reply, Spotify cache fix, expanded stop-words
+- Emergency mode auto-cancels when user replies on Telegram
+- More natural stop-word handling
+
+[556765b]
+feat: full health module - sleep, water, mood, symptoms, exercise, meds, wellness score, proactive check-ins
+- Track sleep hours, water intake, mood (1-10), symptoms, exercise, medications
+- Wellness score calculated from all tracked metrics
+- Proactive check-ins (reminds to log water, sleep, etc.)
+- Health profile persisted to JSON
+
+[d4fefbb]
+fix: chime (sounddevice), time formatting, weather advice, pronoun fix, user name in reminders
+- Fixed chime playback using sounddevice
+- Weather gives seasonal advice
+- Reminders address user by name
+
+[53a7657]
+feat: use Alarm01.wav for alarms/reminders, keep alarm.wav for emergency
+- Different audio cues for alarms vs emergency alerts
+
+[fe8f3e2]
+fix: alarms/reminders not firing - broken time parsing and field mismatch
+- Fixed alarm/reminder scheduler time matching
+- Fixed JSON field key mismatch
+
+[e987e27]
+feat: natural speech, weather/name/location, alarm+reminder audio, reminder format fix
+- More natural conversational responses
+- Weather integration with location awareness
+- Audio playback for alarms and reminders
+
+[c06b897]  (INITIAL WORKING BUILD)
+feat: working Deepgram Voice Agent with bidirectional speech
+- Deepgram Voice Agent API (STT + LLM + TTS in one WebSocket)
+- Bidirectional audio streaming (mic in, speaker out)
+- Intent routing: weather, Spotify, health, alarms, reminders, emergency
+- Telegram emergency alerts
+- Basic conversation memory
+
+================================================================
+  NEXT PHASE: FEATURE EXPANSION ROADMAP
+================================================================
+
+PHASE 2 - INTELLIGENCE LAYER (Priority: HIGH)
+----------------------------------------------
+- Long-term vector memory (ChromaDB - free, local, RPi-compatible)
+  * Stores conversations as embeddings
+  * Recalls context: "You mentioned back pain last week"
+  * Uses sentence-transformers (free, runs on RPi 4)
+- Proactive background agent
+  * Morning briefing (weather + agenda + health summary)
+  * Idle-time reminders and nudges
+- Emotion detection from voice (pitch/pace analysis, no extra API)
+
+PHASE 2 - MEDIA & LIFESTYLE
+----------------------------
+- Spotify mood-based playback ("play something chill")
+- Dafit AW73 smartwatch integration
+  * Research: AW73 uses a companion app; check for BLE/API
+  * Plan: Bluetooth polling or companion app data export
+  * Goal: heart rate, steps, sleep data -> health module
+
+PHASE 2 - REAL-TIME WEB SEARCH
+--------------------------------
+- SerpAPI (100 free searches/month on free tier)
+- Replaces static RSS health news with live search results
+- Voice: "search for...", "what's the latest on..."
+- Also powers general knowledge queries
+
+PHASE 2 - CALENDAR INTEGRATION
+--------------------------------
+- Google Calendar API (free, OAuth2)
+- Read/create/delete events by voice
+- Morning briefing includes today's events
+- Reminder: "you have a meeting in 30 minutes"
+
+PHASE 2 - WAKE WORD (FREE)
+---------------------------
+- openWakeWord (fully free, Python, runs on RPi)
+  https://github.com/dscripka/openWakeWord
+- Custom model training available
+- Wake phrase: "Hey Jarvis"
+- Alternative: Porcupine free tier (3 wake words free)
+
+================================================================
+  DEPLOYMENT OPTIONS (FREE / LOW COST)
+================================================================
+
+OPTION 1 - Docker (Self-hosted, Recommended for Portfolio)
+----------------------------------------------------------
+- Dockerfile + docker-compose.yml
+- Run on any Linux machine, RPi, or cloud VM
+- Pros: Reproducible, easy to share, portfolio-friendly
+- Cons: Needs a machine running 24/7
+- Cost: FREE (hardware/VM cost only)
+
+OPTION 2 - Raspberry Pi (Local, Always-on)
+------------------------------------------
+- RPi 4 (4GB RAM) recommended
+- All features run locally (ChromaDB, Whisper, everything)
+- Pros: Private, no cloud costs, real embedded AI device
+- Cost: ~$55 hardware (one-time)
+- NOTE: Tag v1.0-rpi-ready is your deploy baseline
+
+OPTION 3 - Railway (Free Cloud Hosting)
+----------------------------------------
+- railway.app - Free tier: $5 credit/month (enough for light use)
+- Deploy from GitHub repo directly
+- Supports Python/FastAPI natively
+- Cons: No persistent disk on free tier (use external DB)
+- Cost: FREE (within limits)
+
+OPTION 4 - Render (Free Cloud Hosting)
+----------------------------------------
+- render.com - Free tier: 750 hours/month web service
+- GitHub integration, auto-deploy on push
+- Spins down after 15min inactivity (free tier)
+- Cost: FREE
+
+OPTION 5 - Hugging Face Spaces (Free, Portfolio Showcase)
+----------------------------------------------------------
+- huggingface.co/spaces - Free GPU/CPU hosting
+- Great for AI demos and portfolio
+- Public URL, easy to share
+- Supports Gradio or FastAPI
+- Cost: FREE
+
+OPTION 6 - fly.io (Free Tier)
+-------------------------------
+- fly.io - 3 free shared VMs, persistent volumes
+- Docker-based deploy
+- Better free tier than Render (doesn't sleep)
+- Cost: FREE (within limits)
+
+OPTION 7 - Python SDK / Embedded (No Server Needed)
+-----------------------------------------------------
+- Package core as a Python library: pip install ai-companion
+- Run directly on any machine: python -m ai_companion
+- Pros: Zero hosting cost, runs anywhere Python runs
+- Cons: User must run it locally
+- Good for: Open source portfolio / GitHub showcase
+
+================================================================
+  RASPBERRY PI COMPATIBILITY NOTES
+================================================================
+- ChromaDB: YES - runs on RPi 4, uses ~200MB RAM
+- Qdrant: YES - has ARM binary, heavier (~400MB RAM)
+  Recommendation: ChromaDB for RPi
+- sentence-transformers: YES - slow on RPi 3, fine on RPi 4
+- openWakeWord: YES - designed for edge devices
+- Deepgram API: YES - cloud API, just needs internet
+- SerpAPI: YES - cloud API, just needs internet
+- Google Calendar API: YES - cloud API
+- Spotify API: YES - cloud API
+- OpenCV (motion): YES - RPi has official support
+- sounddevice/pyaudio: YES - RPi audio works
+
+RECOMMENDED RPi SETUP:
+- Raspberry Pi 4 (4GB RAM)
+- 32GB+ SD card (Class 10)
+- USB microphone or ReSpeaker HAT
+- Speaker (3.5mm or USB)
+- Optional: PIR sensor for motion detection
+
+================================================================
+  END OF PROGRESS LOG
+================================================================
