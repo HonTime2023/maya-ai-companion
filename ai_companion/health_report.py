@@ -1,5 +1,5 @@
 """
-Health Report Module — Generates weekly spoken health summaries for JARVIS.
+Health Report Module — Generates weekly spoken health summaries for MAYA.
 """
 from datetime import date
 from health_memory import load_profile, get_log_entries

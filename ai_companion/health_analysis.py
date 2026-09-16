@@ -1,5 +1,5 @@
 """
-Health Analysis Module — Voice-callable health tracking functions for JARVIS.
+Health Analysis Module — Voice-callable health tracking functions for MAYA.
 All functions return plain spoken strings (no markdown).
 """
 from datetime import date

@@ -1,12 +1,23 @@
-# JARVIS — AI Companion
+# MAYA — AI Companion
 
 A voice-first personal AI assistant that listens, thinks, and speaks in real time.
 Built on Deepgram's unified Voice Agent API (single WebSocket for STT + LLM + TTS),
 with a suite of smart home, health, music, and emergency features callable by voice.
 
+## Run the webapp with Docker
+
+```bash
+docker build -t maya-ai-companion .
+docker run -p 8000:8000 --env-file .env maya-ai-companion
+```
+
+The native voice pipeline (`ai_companion/main.py`) needs direct microphone/speaker
+access (and Raspberry Pi GPIO in motion-detection mode), so it's designed to run
+natively on the host rather than inside the container — see `SETUP.txt`.
+
 ---
 
-## What JARVIS Does — End to End
+## What MAYA Does — End to End
 
 ### 1. Voice Pipeline
 | Stage | Technology | Detail |
@@ -52,7 +63,7 @@ All logged to `health_profile.json`, persisted across sessions.
 | "I have diabetes" | `add_health_condition` — adds to conditions |
 | "How am I doing health-wise?" | `get_health_summary` / `get_wellness_score` |
 
-Proactive daily check-in: JARVIS asks how you are each morning if it hasn't heard from you.
+Proactive daily check-in: MAYA asks how you are each morning if it hasn't heard from you.
 
 #### Health News (no API key required)
 - "What's the latest health news?" → headlines from BBC Health + Medical News Today (RSS)
@@ -91,7 +102,7 @@ Auto-selects backend in priority order: RPi GPIO PIR sensor → OpenCV webcam �
 | "Motion status" | Reports active/inactive, backend, last trigger time |
 | "Set motion cooldown to 60 seconds" | Adjusts minimum time between alerts |
 
-When motion is detected, JARVIS speaks aloud: "Hello! I noticed some movement." or "Welcome back" on repeat triggers.
+When motion is detected, MAYA speaks aloud: "Hello! I noticed some movement." or "Welcome back" on repeat triggers.
 
 #### Multi-User Support
 - Each user gets an isolated profile directory under `ai_companion/users/`
@@ -168,7 +179,7 @@ SPOTIPY_REDIRECT_URI=http://127.0.0.1:8888/callback
 
 ## How to Launch
 
-> **Critical:** JARVIS must be launched from inside the `ai_companion` directory.
+> **Critical:** MAYA must be launched from inside the `ai_companion` directory.
 > This ensures the `.env` file and all module imports resolve correctly.
 
 ### Step 1 — Open a terminal and navigate to the app directory
@@ -222,7 +233,7 @@ Speak naturally. No wake word is required. Examples to try:
 
 ### Step 4 — Stop
 
-Press `Ctrl+C` in the terminal. JARVIS shuts down cleanly.
+Press `Ctrl+C` in the terminal. MAYA shuts down cleanly.
 
 ---
 

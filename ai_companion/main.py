@@ -73,7 +73,7 @@ EMERGENCY_PHRASES = [
 ]
 
 # Optional wake words (can be disabled via user preference)
-WAKE_WORDS = ["jarvis", "hey jarvis", "hey", "ok jarvis", "okay jarvis"]
+WAKE_WORDS = ["maya", "hey maya", "hey", "ok maya", "okay maya"]
 
 
 # ====== INTERRUPT HANDLING ======
@@ -286,13 +286,13 @@ def onboard_user():
         say(f"Nice to meet you, {name_input}!")
     
     say("I'm here to support your health and well-being. We can chat naturally, set reminders, track health metrics, and more.")
-    say("Would you like me to require you to say a wake word like 'Jarvis' before responding, or would you prefer natural conversation mode?")
+    say("Would you like me to require you to say a wake word like 'Maya' before responding, or would you prefer natural conversation mode?")
     
     preference_input = listen().lower()
     
-    if "wake word" in preference_input or "jarvis" in preference_input:
+    if "wake word" in preference_input or "maya" in preference_input:
         user.update_preferences({"use_wake_words": True, "natural_mode": False})
-        say("Okay, I'll listen for 'Jarvis' before responding.")
+        say("Okay, I'll listen for 'Maya' before responding.")
     else:
         user.update_preferences({"use_wake_words": False, "natural_mode": True})
         say("Perfect. I'll respond naturally to everything you say.")
@@ -372,7 +372,7 @@ def main():
 
         # ====== WAKE WORD HANDLING (Optional) ======
         if use_wake_words:
-            # Wake word mode: require "jarvis" or similar
+            # Wake word mode: require "maya" or similar
             if not any(word in cleaned_text for word in WAKE_WORDS):
                 continue
 

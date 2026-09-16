@@ -1,5 +1,5 @@
 ================================================================
-  AI COMPANION (JARVIS) - COMMIT HISTORY & PROGRESS LOG
+  AI COMPANION (MAYA) - COMMIT HISTORY & PROGRESS LOG
 ================================================================
 
 TAG: v1.0-rpi-ready  <-- DEPLOY THIS ON RASPBERRY PI FIRST
@@ -26,7 +26,7 @@ feat: add webapp UI with Spotify lyrics sync, teleprompter-style LRC display,
 
 [e84fbbf]
 docs: update Questions.md
-- Expanded interaction examples for JARVIS
+- Expanded interaction examples for MAYA
 
 [74bfba8]
 chore: remove torch/silero-vad cluster from requirements (~2GB unused)
@@ -38,7 +38,7 @@ chore: add requirements.txt frozen from cleanenv
 - Full reproducible dependency list
 
 [1b6ae59]
-docs: add Questions.md with 133 ways to interact with JARVIS
+docs: add Questions.md with 133 ways to interact with MAYA
 - Comprehensive guide of all voice commands and questions
 
 [7f1a770]
@@ -149,7 +149,7 @@ PHASE 2 - WAKE WORD (FREE)
 - openWakeWord (fully free, Python, runs on RPi)
   https://github.com/dscripka/openWakeWord
 - Custom model training available
-- Wake phrase: "Hey Jarvis"
+- Wake phrase: "Hey Maya"
 - Alternative: Porcupine free tier (3 wake words free)
 
 ================================================================

@@ -1,5 +1,5 @@
 """
-JARVIS Web App — FastAPI WebSocket Proxy Server
+MAYA Web App — FastAPI WebSocket Proxy Server
 Bridges browser audio <-> Deepgram Voice Agent.
 Executes all function calls server-side (API keys never reach the browser).
 
@@ -37,9 +37,9 @@ import urllib.request
 import urllib.parse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
-log = logging.getLogger("JARVIS-Web")
+log = logging.getLogger("MAYA-Web")
 
-app = FastAPI(title="JARVIS Web")
+app = FastAPI(title="MAYA Web")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # ── /health ───────────────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ async def get_lyrics(artist: str = "", title: str = ""):
                 safe_a = urllib.parse.quote(artist_clean, safe="")
                 safe_t = urllib.parse.quote(track_clean,  safe="")
                 url    = f"https://api.lyrics.ovh/v1/{safe_a}/{safe_t}"
-                req2   = urllib.request.Request(url, headers={"User-Agent": "JARVIS/1.0"})
+                req2   = urllib.request.Request(url, headers={"User-Agent": "MAYA/1.0"})
                 with urllib.request.urlopen(req2, timeout=8) as resp:
                     data = json.loads(resp.read().decode())
                     return data.get("lyrics") or None

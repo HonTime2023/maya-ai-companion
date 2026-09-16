@@ -1,5 +1,5 @@
 """
-Emergency Module — Real SOS alert system for JARVIS.
+Emergency Module — Real SOS alert system for MAYA.
 Sends Telegram SOS, triggers alarm, repeats alerts every 5 minutes until cancelled.
 Auto-cancels when someone replies to the Telegram bot.
 """
@@ -24,7 +24,7 @@ def trigger_emergency(agent_thread=None) -> str:
     - Sends a Telegram SOS message to the configured chat
     - Starts a repeat-alert thread that re-sends every 5 minutes
     - Starts a Telegram reply watcher that auto-cancels when someone responds
-    - Returns a spoken confirmation for JARVIS to read aloud
+    - Returns a spoken confirmation for MAYA to read aloud
     """
     profile = load_profile()
     name = profile.get("name", "User")
@@ -40,7 +40,7 @@ def trigger_emergency(agent_thread=None) -> str:
         "🚨 SOS ALERT 🚨",
         f"From: {name}",
         f"Time: {timestamp}",
-        "JARVIS AI Companion has triggered an emergency alert.",
+        "MAYA AI Companion has triggered an emergency alert.",
     ]
     if contact:
         lines.append(f"Emergency contact: {contact}")

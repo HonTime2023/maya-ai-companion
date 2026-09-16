@@ -1,5 +1,5 @@
 """
-Voice-Only UI: JARVIS-style interface for AI Companion
+Voice-Only UI: MAYA-style interface for AI Companion
 Shows listening state, real-time transcription, and AI responses
 No text input - voice only
 """
@@ -21,7 +21,7 @@ except ImportError:
 
 
 class AICompanionVoiceUI:
-    """JARVIS-style voice interface for AI Companion"""
+    """MAYA-style voice interface for AI Companion"""
     
     def __init__(self, root):
         self.root = root

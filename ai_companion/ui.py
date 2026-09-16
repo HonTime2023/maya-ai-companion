@@ -143,7 +143,7 @@ class AICompanionUI:
                     self.user.update_preferences(
                         {"use_wake_words": True, "natural_mode": False}
                     )
-                    self._display_ai_message("I'll listen for 'Jarvis'.")
+                    self._display_ai_message("I'll listen for 'Maya'.")
                 else:
                     self.user.update_preferences(
                         {"use_wake_words": False, "natural_mode": True}

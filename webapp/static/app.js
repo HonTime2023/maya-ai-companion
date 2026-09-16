@@ -1,5 +1,5 @@
 /**
- * app.js — JARVIS Web App
+ * app.js — MAYA Web App
  * Fixed: gapless TTS scheduling, TTS→orb amplitude, mic→orb amplitude, null guards
  */
 
@@ -48,7 +48,7 @@ function tickClock() {
 tickClock(); setInterval(tickClock, 10000);
 
 // ── Orb init ──────────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => { orb = new JarvisOrb('orbCanvas'); });
+window.addEventListener('DOMContentLoaded', () => { orb = new MayaOrb('orbCanvas'); });
 
 // ── Status ────────────────────────────────────────────────────────────────────
 function setStatus(cls, text) {
@@ -396,7 +396,7 @@ function openWebSocket() {
       showCard(msg.ui_type, msg.ui_data||{}, msg.result_text||'');
     }
     else if (t === 'Error') {
-      setStatus('error','Error'); console.error('JARVIS:', msg.message);
+      setStatus('error','Error'); console.error('MAYA:', msg.message);
       if (msg.message) addTranscript('assistant', `⚠ ${msg.message}`);
     }
   };
@@ -455,7 +455,7 @@ function _onSessionEnd() {
   micBtn.classList.remove('active');
   micBtn.querySelector('.mic-icon').style.display  = '';
   micBtn.querySelector('.stop-icon').style.display = 'none';
-  micHint.textContent = 'Tap to speak with JARVIS';
+  micHint.textContent = 'Tap to speak with MAYA';
   setStatus('','Offline');
   if (orb) { orb.setState('idle'); orb.setAmplitude(0); }
 }

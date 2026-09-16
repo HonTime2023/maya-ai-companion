@@ -1,7 +1,7 @@
-# JARVIS — Everything You Can Say
+# MAYA — Everything You Can Say
 
 > A complete reference of every way you can interact with your AI Companion.  
-> All interaction is **voice-first** — just speak naturally. JARVIS understands intent.
+> All interaction is **voice-first** — just speak naturally. MAYA understands intent.
 
 ---
 
@@ -25,7 +25,7 @@
 11. "Will it be sunny the day after tomorrow?"
 12. "Give me the forecast for the next 3 days."
 13. "What's the weather forecast for the next 5 days?"
-14. "What should I wear today?" *(JARVIS infers from weather)*
+14. "What should I wear today?" *(MAYA infers from weather)*
 
 ---
 
@@ -208,7 +208,7 @@
 
 ## 💬 Conversation & General
 
-123. "Hello JARVIS."
+123. "Hello MAYA."
 124. "Good morning."
 125. "Good night."
 126. "How are you?"
@@ -224,9 +224,9 @@
 
 ## 💡 Tips
 
-- You don't need to use exact phrases — speak naturally and JARVIS will understand intent.
+- You don't need to use exact phrases — speak naturally and MAYA will understand intent.
 - Relative times work: *"in an hour"*, *"in half an hour"*, *"in 20 minutes"*, *"tomorrow morning"*.
-- JARVIS remembers your **name** and **location** across sessions.
+- MAYA remembers your **name** and **location** across sessions.
 - Health data accumulates daily — ask for your summary at any time.
 - Emergency SOS repeats every 5 minutes until cancelled.
-- Motion alerts are spoken aloud by JARVIS the moment movement is detected.
+- Motion alerts are spoken aloud by MAYA the moment movement is detected.

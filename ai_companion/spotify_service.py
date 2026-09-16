@@ -1,5 +1,5 @@
 """
-Spotify Service — Voice-callable Spotify playback control for JARVIS.
+Spotify Service — Voice-callable Spotify playback control for MAYA.
 All public functions return plain spoken strings.
 Gracefully handles missing credentials or unavailable Spotify.
 """

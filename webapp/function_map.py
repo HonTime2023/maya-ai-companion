@@ -583,11 +583,11 @@ def build_settings_config() -> dict:
     name = user.get_name() if user else "there"
     greeting = (
         f"Hello{', ' + name if name and name not in ('User','') else ''}! "
-        "I'm JARVIS, your AI companion. How can I help you today?"
+        "I'm MAYA, your AI companion. How can I help you today?"
     )
 
     SYSTEM_PROMPT = (
-        "You are JARVIS, a warm, intelligent AI companion. "
+        "You are MAYA, a warm, intelligent AI companion. "
         "CRITICAL SPEECH RULES — follow these at all times: "
         "1. NEVER use markdown formatting of any kind. No asterisks, dashes for lists, pound signs, or numbered lists. TTS speaks every character literally. Use only plain natural sentences. "
         "2. Be concise and warm. Give short friendly answers like a trusted companion — not a written document. "

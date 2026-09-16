@@ -28,3 +28,17 @@ ai_companion/users/
 ai_companion/health_profile.json
 ai_companion/alarms.json
 ai_companion/reminders.json
+webapp/users/
+webapp/health_profile.json
+
+# OAuth tokens / credentials — never commit these
+ai_companion/.spotify_token_cache
+**/.spotify_token_cache
+google_credentials.json
+google_token.json
+ai_companion/google_credentials.json
+ai_companion/google_token.json
+
+# Local memory store
+ai_companion/memory_db/
+memory_db/

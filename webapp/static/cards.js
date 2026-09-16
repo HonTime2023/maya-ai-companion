@@ -1,5 +1,5 @@
 /**
- * cards.js — all UI card renderers for JARVIS web app
+ * cards.js — all UI card renderers for MAYA web app
  * Each renderer returns an HTML string and is called with ui_data from the server.
  */
 
@@ -911,7 +911,7 @@ function renderText(d) {
   <div class="ui-card">
     <div class="card-header">
       <span class="card-header-icon">◈</span>
-      <span class="card-header-title">JARVIS</span>
+      <span class="card-header-title">MAYA</span>
     </div>
     <div class="card-body">
       <div class="text-card-content">${d.text || ''}</div>
@@ -932,7 +932,7 @@ function renderMedication(d) {
           <div class="med-nf-icon">&#128138;</div>
           <div class="med-nf-title">${d.name || 'Medication'}</div>
           <div class="med-nf-body">
-            Official database entry not found for this medication. Your JARVIS assistant is providing guidance verbally &#8212; please listen carefully.
+            Official database entry not found for this medication. Your MAYA assistant is providing guidance verbally &#8212; please listen carefully.
           </div>
           <div class="med-disclaimer">
             &#9888;&#65039; Always consult your doctor or pharmacist before taking any medication.

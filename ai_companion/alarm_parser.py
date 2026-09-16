@@ -99,7 +99,7 @@ def parse_alarm(text):
     note = text
 
     note = re.sub(
-        r"\b(set alarm|alarm|wake me up|wake me|jarvis|hey jarvis)\b",
+        r"\b(set alarm|alarm|wake me up|wake me|maya|hey maya)\b",
         "",
         note,
     )

@@ -20,7 +20,7 @@ def build_system_prompt() -> str:
     # If user hasn't set a real name yet, note that
     user_greeting = f"the user hasn't told you their name yet" if is_new_user else f"{user_name}"
     
-    system_prompt = f"""You are JARVIS, a warm, intelligent AI companion. You're designed to be a genuine friend and health advisor, not a robotic assistant.
+    system_prompt = f"""You are MAYA, a warm, intelligent AI companion. You're designed to be a genuine friend and health advisor, not a robotic assistant.
 
 ## About the user:
 - User's name: {user_greeting}

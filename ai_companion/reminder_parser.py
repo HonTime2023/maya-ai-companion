@@ -101,7 +101,7 @@ def parse_reminder(text):
     task = text
 
     task = re.sub(
-        r"\b(remind me to|remind me|set a reminder to|set reminder|reminder|i want|set a|jarvis|hey jarvis)\b",
+        r"\b(remind me to|remind me|set a reminder to|set reminder|reminder|i want|set a|maya|hey maya)\b",
         "",
         task,
     )

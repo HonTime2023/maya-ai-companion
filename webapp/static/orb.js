@@ -1,5 +1,5 @@
 /**
- * orb.js — JARVIS Super-Intelligence Orb v4
+ * orb.js — MAYA Super-Intelligence Orb v4
  *
  * FIXED: public `state` getter so app.js can route amplitude correctly.
  *
@@ -16,7 +16,7 @@
  *   • All colours via rgba(r,g,b,a) — zero hex manipulation
  */
 
-class JarvisOrb {
+class MayaOrb {
   constructor(canvasId) {
     this._canvas = document.getElementById(canvasId);
     this._ctx    = this._canvas ? this._canvas.getContext('2d') : null;

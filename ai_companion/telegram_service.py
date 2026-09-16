@@ -40,7 +40,7 @@ def send_telegram_message(message: str, chat_id=None) -> bool:
 
 
 # ------------------------------------------------------------------ #
-# Voice-callable functions (return spoken strings for JARVIS to read)
+# Voice-callable functions (return spoken strings for MAYA to read)
 # ------------------------------------------------------------------ #
 
 def send_voice_message(text: str) -> str:
